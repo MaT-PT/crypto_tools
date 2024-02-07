@@ -1,11 +1,8 @@
 import math
-from typing import Protocol, cast
+from typing import cast
 
 from ..sage_types import ECFF, GF, ECFFPoint, EllipticCurve
-
-
-class SupportsLog(Protocol):
-    def log(self, base: "SupportsLog") -> int: ...
+from ..types import SupportsLog
 
 
 def embedding_degree(E: ECFF, max_k: int) -> int:

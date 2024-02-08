@@ -1,5 +1,5 @@
 from string import whitespace as ws
-from typing import Generator
+from typing import Iterable
 
 
 def parse_int(value: str) -> int:
@@ -13,20 +13,26 @@ def parse_int(value: str) -> int:
     return int(value)
 
 
-class Point:
-    x: int
-    y: int
-
-    def __init__(self, x: int | str | tuple[int, int], y: int | None = None) -> None:
+class Point(tuple[int, int]):
+    def __new__(cls, x: int | str | tuple[int, int], y: int | None = None) -> "Point":
+        t: Iterable[int]
         if isinstance(x, tuple):
-            self.x, self.y = x
+            t = x
         elif isinstance(x, str):
-            self.x, self.y = [parse_int(n) for n in x.strip(ws + "()[]{}").split(",")]
+            t = (parse_int(n) for n in x.strip(ws + "()[]{}").split(","))
         elif y is not None:
-            self.x = x
-            self.y = y
+            t = (x, y)
         else:
             raise ValueError("Missing y coordinate")
+        return super().__new__(cls, t)  # type: ignore
+
+    @property
+    def x(self) -> int:
+        return self[0]
+
+    @property
+    def y(self) -> int:
+        return self[1]
 
     def __str__(self) -> str:
         return f"({self.x}, {self.y})"
@@ -34,23 +40,8 @@ class Point:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}{str(self)}"
 
-    def __hash__(self) -> int:
-        return hash((self.x, self.y))
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Point):
-            return NotImplemented
-        return self.x == other.x and self.y == other.y
-
-    def __len__(self) -> int:
-        return 2
-
-    def __getitem__(self, i: int) -> int:
-        return (self.x, self.y)[i]
-
-    def __iter__(self) -> Generator[int, None, None]:
-        yield self.x
-        yield self.y
+    def on_curve(self, a: int, b: int, p: int) -> bool:
+        return curve_contains_point(a, b, p, self)
 
 
 def curve_contains_point(a: int, b: int, p: int, P: Point | tuple[int, int]) -> bool:

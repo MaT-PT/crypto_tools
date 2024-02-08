@@ -1,4 +1,16 @@
+from string import whitespace as ws
 from typing import Generator
+
+
+def parse_int(value: str) -> int:
+    value = value.strip()
+    if value.startswith("0x"):
+        return int(value, 16)
+    if value.startswith("0b"):
+        return int(value, 2)
+    if value.startswith("0o"):
+        return int(value, 8)
+    return int(value)
 
 
 class Point:
@@ -9,7 +21,7 @@ class Point:
         if isinstance(x, tuple):
             self.x, self.y = x
         elif isinstance(x, str):
-            self.x, self.y = [int(n.strip()) for n in x.split(",")]
+            self.x, self.y = [parse_int(n) for n in x.strip(ws + "()[]{}").split(",")]
         elif y is not None:
             self.x = x
             self.y = y

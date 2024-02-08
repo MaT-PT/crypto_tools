@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser, ArgumentTypeError, Namespace
 from typing import cast
 
-from libs.argparse_utils import PointAction, my_int
-from libs.ecc_utils import Point, calc_curve_params, curve_contains_point
+from libs.ecc_utils import Point, calc_curve_params, curve_contains_point, parse_int
+
+
+def my_int(value: str) -> int:
+    try:
+        return parse_int(value)
+    except ValueError as e:
+        raise ArgumentTypeError(str(e))
 
 
 def parse_args() -> Namespace:

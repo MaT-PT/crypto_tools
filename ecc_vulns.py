@@ -11,8 +11,7 @@ def parse_args() -> Namespace:
     parser = ArgumentParser(
         description="A collection of elliptic curve cryptography vulnerabilities.\n"
         "Try to find the discrete logarithm of a point P on the curve y^2 = x^3 + ax + b (mod p) "
-        "given the generator point G (that is, find n in P = n * G).",
-        allow_abbrev=False,
+        "given the generator point G (that is, find n in P = n * G)."
     )
 
     grp_curve = parser.add_argument_group("Elliptic curve parameters")
@@ -33,6 +32,9 @@ def parse_args() -> Namespace:
     grp_p.add_argument("-px", type=my_int, help="P x coordinate", metavar="Px", action=PointAction)
     grp_p.add_argument("-py", type=my_int, help="P y coordinate", metavar="Py", action=PointAction)
     grp_p.add_argument("-P", type=Point, help="P as a pair: x,y", metavar="P", action=PointAction)
+
+    grp_ph = parser.add_argument_group("Pohlig-Hellman attack")
+    grp_ph.add_argument("--max-bits", "-m", type=int, default=56, help="Maximum factor bit length")
 
     args = parser.parse_args()
 
@@ -69,7 +71,7 @@ def parse_args() -> Namespace:
 
 def do_attacks(args: Namespace) -> int | None:
     print("* Importing libs...")
-    from libs.attacks import mov_attack, smart_attack
+    from libs.attacks import mov_attack, pohlig_hellman_attack, smart_attack
     from libs.sage_types import ECFF, GF, ECFFPoint, EllipticCurve
 
     E = cast(ECFF, EllipticCurve(GF(args.p), (args.a, args.b)))
@@ -79,6 +81,7 @@ def do_attacks(args: Namespace) -> int | None:
     print("G:", G)
     print("P:", P)
 
+    print()
     print("Trying MOV attack...")
     try:
         n = mov_attack(G, P)
@@ -96,6 +99,15 @@ def do_attacks(args: Namespace) -> int | None:
     except ValueError as e:
         print("* Smart attack failed:", e)
 
+    print()
+    print("Trying Pohlig-Hellman attack...")
+    try:
+        n = pohlig_hellman_attack(G, P, args.max_bits)
+        print("* Pohlig-Hellman attack succeded!")
+        return n
+    except ValueError as e:
+        print("* Pohlig-Hellman attack failed:", e)
+
     return None
 
 
@@ -108,10 +120,10 @@ def main() -> None:
 
     n = do_attacks(args)
     if n is None:
-        print("* No attack succeeded :(")
+        print("No attack succeeded :(")
         return
 
-    print("* Discrete logarithm: P = n * G")
+    print("Discrete logarithm: P = n * G")
     print(f"{n = }")
 
 

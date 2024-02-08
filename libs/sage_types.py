@@ -1,4 +1,5 @@
 from sage.all import GF, ZZ
+from sage.arith.misc import CRT_list
 from sage.rings.finite_rings.finite_field_prime_modn import FiniteField_prime_modn as FFPmodn
 from sage.rings.integer import Integer
 from sage.rings.padics.factory import Qp
@@ -14,6 +15,7 @@ from sage.structure.factorization import Factorization
 __all__ = [
     "GF",
     "ZZ",
+    "CRT_list",
     "FFPmodn",
     "Integer",
     "Qp",

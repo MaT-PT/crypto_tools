@@ -3,7 +3,7 @@ from typing import cast
 from ..sage_types import ECFF, CRT_list, ECFFPoint, Integer
 
 
-def pohlig_hellman_attack(G: ECFFPoint, P: ECFFPoint, size_limit: int = 56) -> int:
+def pohlig_hellman_attack(G: ECFFPoint, P: ECFFPoint, size_limit: int = 48) -> int:
     """Try solving the discrete logarithm problem using the Pohlig-Hellman algorithm.
     Try with factors of increasing size until the log is found
     (CRT can give the right result even if not all factors are computed).

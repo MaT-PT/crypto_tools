@@ -34,7 +34,7 @@ def parse_args() -> Namespace:
     grp_p.add_argument("-P", type=Point, help="P as a pair: x,y", metavar="P", action=PointAction)
 
     grp_ph = parser.add_argument_group("Pohlig-Hellman attack")
-    grp_ph.add_argument("--max-bits", "-m", type=int, default=56, help="Maximum factor bit length")
+    grp_ph.add_argument("--max-bits", "-m", type=int, default=48, help="Maximum factor bit length")
 
     args = parser.parse_args()
 

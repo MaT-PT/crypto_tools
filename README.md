@@ -17,6 +17,8 @@ This is a work in progress, and its purpose is to complement other tools such as
 
   Implemented attacks:
 
-  - [`ecc_mov.py`](libs/attacks/ecc_mov.py): Implements the MOV attack that works on elliptic curves with a small embedding degree (supersingular curves) by pairing the curve group with a finite field where the DLP is easier to solve.
+  - [`ecc_mov.py`](libs/attacks/ecc_mov.py): Implements the MOV attack that works on supersingular elliptic curves (whose embedding degree is small), by pairing the curve group with a finite field where the <abbr title="Discrete Logarithm Problem">DLP</abbr> is easier to solve.
 
-  - [`ecc_smart.py`](libs/attacks/ecc_smart.py): Implements Smart's attack that works on elliptic curves whose order is equal to the field size and whose trace of Frobenius is equal to 1.
+  - [`ecc_smart.py`](libs/attacks/ecc_smart.py): Implements Smart's attack that works on anomalous elliptic curves ($\#E(F_p) = p$).
+
+  - [`ecc_pohlig_hellman.py`](libs/attacks/ecc_pohlig_hellman.py): Implements the Pohlig-Hellman algorithm to solve the <abbr title="Elliptic Curve Discrete Logarithm Problem">ECDLP</abbr> on curves of relatively smooth order, by reducing the problem to smaller subgroups. It solves the <abbr title="Discrete Logarithm Problem">DLP</abbr> iteratively for each prime factor of the curve order and stops once their <abbr title="Chinese Remainder Theorem">CRT</abbr> is the right solution, or if all remaining factors are too large (configurable via `--max-bits`).

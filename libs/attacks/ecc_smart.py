@@ -26,9 +26,6 @@ def smart_attack(G: ECFFPoint, P: ECFFPoint) -> int:
     print("* Order: #E(FP) =", curve_order)
     if curve_order != p:
         raise ValueError("Curve is not anomalous (Smart attack requires #E(Fp) = p)")
-    trace = E.trace_of_frobenius()
-    if trace != 1:
-        raise ValueError(f"Smart attack requires trace of Frobenius = 1 (current: {trace})")
 
     Eqp = cast(
         ECPF,

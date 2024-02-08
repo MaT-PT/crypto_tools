@@ -3,7 +3,7 @@
 from argparse import ArgumentParser, ArgumentTypeError, Namespace
 from typing import cast
 
-from libs.ecc_utils import Point, calc_curve_params, curve_contains_point, parse_int
+from libs.ecc_utils import Point, calc_curve_params, parse_int
 
 
 def my_int(value: str) -> int:
@@ -20,41 +20,50 @@ def parse_args() -> Namespace:
         "given the generator point G (that is, find n in P = n * G)."
     )
 
-    grp_curve = parser.add_argument_group("Elliptic curve parameters")
+    grp_curve = parser.add_argument_group(
+        "Elliptic curve parameters", description="Curve has equation y^2 = x^3 + ax + b (mod p)"
+    )
     grp_curve.add_argument("-a", type=my_int, help="Curve parameter a (optional)", metavar="a")
     grp_curve.add_argument("-b", type=my_int, help="Curve parameter b (optional)", metavar="b")
     grp_curve.add_argument("-p", type=my_int, help="Prime modulus", metavar="p", required=True)
 
     grp_g = parser.add_argument_group(
-        "Generator point G", description="(supply either -gx/-gy or -G)"
+        "Generator point G", description="Supply either -G, or -gx (and optionally -gy)"
     )
-    grp_g.add_argument("-gx", type=my_int, help="G x coordinate", metavar="Gx", action=PointAction)
-    grp_g.add_argument("-gy", type=my_int, help="G y coordinate", metavar="Gy", action=PointAction)
-    grp_g.add_argument("-G", type=Point, help="G as a pair: x,y", metavar="G", action=PointAction)
+    grp_gx = grp_g.add_mutually_exclusive_group(required=True)
+    grp_gx.add_argument("-G", type=Point, help="G as a pair: x,y", metavar="G")
+    grp_gx.add_argument("-gx", type=my_int, help="G x coordinate", metavar="Gx")
+    grp_g.add_argument("-gy", type=my_int, help="G y coordinate (optional)", metavar="Gy")
 
     grp_p = parser.add_argument_group(
-        "Target point P", description="(supply either -px/-py or -P)"
+        "Target point P", description="Supply either -P, or -px (and optionally -py)"
     )
-    grp_p.add_argument("-px", type=my_int, help="P x coordinate", metavar="Px", action=PointAction)
-    grp_p.add_argument("-py", type=my_int, help="P y coordinate", metavar="Py", action=PointAction)
-    grp_p.add_argument("-P", type=Point, help="P as a pair: x,y", metavar="P", action=PointAction)
+    grp_px = grp_p.add_mutually_exclusive_group(required=True)
+    grp_px.add_argument("-P", type=Point, help="P as a pair: x,y", metavar="P")
+    grp_px.add_argument("-px", type=my_int, help="P x coordinate", metavar="Px")
+    grp_p.add_argument("-py", type=my_int, help="P y coordinate (optional)", metavar="Py")
 
     grp_ph = parser.add_argument_group("Pohlig-Hellman attack")
     grp_ph.add_argument("--max-bits", "-m", type=int, default=48, help="Maximum factor bit length")
 
+    parser.epilog = (
+        "If a and b are known, Gy and Py can be omitted (and vice versa).\n"
+        "Points that are fully specified will be checked to be on the curve."
+    )
+
     args = parser.parse_args()
 
     if args.G is not None:
-        args.gx, args.gy = args.G.x, args.G.y
+        args.gx, args.gy = args.G
     if args.P is not None:
-        args.px, args.py = args.P.x, args.P.y
-    if args.gx is None or args.gy is None:
-        parser.error("the following arguments are required: -gx/-gy or -G")
-    if args.px is None or args.py is None:
-        parser.error("the following arguments are required: -px/-py or -P")
-    if args.G is None:
+        args.px, args.py = args.P
+    if (args.gy is None or args.py is None) and (args.a is None or args.b is None):
+        parser.error(
+            "the following arguments are required: (-a and -b) or ((-G or -gy) and (-P or -py))"
+        )
+    if args.G is None and args.gx is not None and args.gy is not None:
         args.G = Point(args.gx, args.gy)
-    if args.P is None:
+    if args.P is None and args.px is not None and args.py is not None:
         args.P = Point(args.px, args.py)
     if args.a is None and args.b is None:
         try:
@@ -67,9 +76,9 @@ def parse_args() -> Namespace:
     elif args.a is None or args.b is None:
         parser.error("supply either both -a and -b, or none of them")
 
-    if not curve_contains_point(args.a, args.b, args.p, args.G):
+    if isinstance(args.G, Point) and not args.G.on_curve(args.a, args.b, args.p):
         parser.error("G is not on the curve")
-    if not curve_contains_point(args.a, args.b, args.p, args.P):
+    if isinstance(args.P, Point) and not args.P.on_curve(args.a, args.b, args.p):
         parser.error("P is not on the curve")
 
     return args
@@ -78,11 +87,17 @@ def parse_args() -> Namespace:
 def do_attacks(args: Namespace) -> int | None:
     print("* Importing libs...")
     from libs.attacks import mov_attack, pohlig_hellman_attack, smart_attack
-    from libs.sage_types import ECFF, GF, ECFFPoint, EllipticCurve
+    from libs.sage_types import ECFF, GF, ECFFPoint, EllipticCurve, Integer
 
     E = cast(ECFF, EllipticCurve(GF(args.p), (args.a, args.b)))
-    G = cast(ECFFPoint, E(tuple(args.G)))
-    P = cast(ECFFPoint, E(tuple(args.P)))
+    if args.gy is None:
+        G = cast(ECFFPoint, E.lift_x(Integer(args.gx)))
+    else:
+        G = cast(ECFFPoint, E(args.G))
+    if args.py is None:
+        P = cast(ECFFPoint, E.lift_x(Integer(args.px)))
+    else:
+        P = cast(ECFFPoint, E(args.P))
     print("E:", E)
     print("G:", G)
     print("P:", P)
@@ -121,8 +136,14 @@ def main() -> None:
     args = parse_args()
 
     print(f"Curve: y^2 = x^3 + {args.a}x + {args.b} (mod {args.p})")
-    print(f"Generator point G: {args.G}")
-    print(f"Target point P: {args.P}")
+    if args.G is None:
+        print("Generator point G: Gx =", args.gx)
+    else:
+        print("Generator point G:", args.G)
+    if args.P is None:
+        print("Target point P: Px =", args.px)
+    else:
+        print(f"Target point P: {args.P}")
 
     n = do_attacks(args)
     if n is None:

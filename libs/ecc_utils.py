@@ -1,5 +1,5 @@
 from string import whitespace as ws
-from typing import Iterable
+from typing import Iterable, Self
 
 
 def parse_int(value: str) -> int:
@@ -14,7 +14,7 @@ def parse_int(value: str) -> int:
 
 
 class Point(tuple[int, int]):
-    def __new__(cls, x: int | str | tuple[int, int], y: int | None = None) -> "Point":
+    def __new__(cls, x: int | str | tuple[int, int], y: int | None = None) -> Self:
         t: Iterable[int]
         if isinstance(x, tuple):
             t = x

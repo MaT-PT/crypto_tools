@@ -55,7 +55,7 @@ def parse_args() -> Namespace:
     grp_ph.add_argument("--max-bits", "-m", type=int, default=48, help="Maximum factor bit length")
 
     grp_d = parser.add_argument_group(
-        "Decryption", description="Decrypt plain secret or AES with Diffie-Hellman"
+        "Decryption", description="Decrypt plain secret or AES, with or without Diffie-Hellman"
     )
     grp_dx = grp_d.add_mutually_exclusive_group()
     grp_dx.add_argument(
@@ -65,8 +65,8 @@ def parse_args() -> Namespace:
         "--decrypt-aes",
         "-D",
         type=hexstr_to_bytes,
-        help="Ciphertext to decrypt with AES",
-        metavar="ENCRYPTED_BYTES",
+        help="AES-encrypted ciphertext",
+        metavar="ENC_BYTES",
     )
     grp_d.add_argument(
         "--iv", "-i", type=hexstr_to_bytes, help="Initialization vector (IV) for AES"
@@ -120,20 +120,16 @@ def parse_args() -> Namespace:
     elif args.a is None or args.b is None:
         parser.error("supply either both -a and -b, or none of them")
 
-    if args.decrypt_aes is not None:
-        if args.iv is None:
-            parser.error("AES decryption requires an IV (--iv)")
-        if args.bx is None:
-            parser.error(
-                "AES decryption requires a public key B (-B, or -bx (and optionally -by))"
-            )
+    if args.decrypt_aes is not None and args.iv is None:
+        parser.error("AES decryption requires an IV (--iv)")
 
     if isinstance(args.G, Point) and not args.G.on_curve(args.a, args.b, args.p):
         parser.error("G is not on the curve")
     if isinstance(args.P, Point) and not args.P.on_curve(args.a, args.b, args.p):
         parser.error("P is not on the curve")
-    if isinstance(args.B, Point) and not args.B.on_curve(args.a, args.b, args.p):
-        parser.error("B is not on the curve")
+    if args.decrypt_aes is not None:
+        if isinstance(args.B, Point) and not args.B.on_curve(args.a, args.b, args.p):
+            parser.error("B is not on the curve")
 
     return args
 
@@ -274,8 +270,11 @@ def main() -> None:
             if args.decrypt:
                 print("* Decrypting secret directly...")
                 decrypted = long_to_bytes(n)
+            elif args.bx is None:
+                print(f"* Decrypting AES (hash: {args.hash})...")
+                decrypted = decrypt_aes_hash(args.decrypt_aes, n, args.iv, args.hash)
             else:
-                print(f"* Decrypting AES with Diffie-Hellman (hash: {args.hash.upper()})...")
+                print(f"* Decrypting AES with Diffie-Hellman (hash function: {args.hash})...")
                 decrypted = decrypt_diffie_hellman(args, n)
 
             try:

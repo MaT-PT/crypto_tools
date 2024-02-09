@@ -24,7 +24,7 @@ def mov_attack(G: ECFFPoint, P: ECFFPoint) -> int:
     k = embedding_degree(E, 6)
     print("* k =", k)
     if k < 0:
-        raise ValueError(f"E is not supersingular")
+        raise ValueError("E is not supersingular")
 
     a, b = E.a4(), E.a6()
     q = E.base_field().order()

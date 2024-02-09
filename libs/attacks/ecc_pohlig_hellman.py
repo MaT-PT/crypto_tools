@@ -45,6 +45,4 @@ def pohlig_hellman_attack(G: ECFFPoint, P: ECFFPoint, size_limit: int = 48) -> i
             print("  * Found n!")
             return int(crt)
 
-    raise ValueError(
-        f"Found no solution for ECDLP, try increasing the bit size limit (--max-bits)"
-    )
+    raise ValueError("Found no solution for ECDLP, try increasing the bit size limit (--max-bits)")

@@ -155,22 +155,50 @@ def decrypt_diffie_hellman(args: Namespace, n: int) -> bytes:
     return decrypt_aes_hash(args.decrypt, shared_secret, args.iv, args.hash)
 
 
-def do_attacks(args: Namespace) -> int | None:
+def do_attacks(args: Namespace) -> int | set[int] | None:
     print("* Importing libs...")
-    from libs.attacks import mov_attack, pohlig_hellman_attack, smart_attack
-    from libs.sage_types import ECFF, GF, ECFFPoint, EllipticCurve, Integer
+    from libs.attacks import mov_attack, pohlig_hellman_attack, singular_attack, smart_attack
+    from libs.sage_types import ECFF, GF, ECFFPoint, EllipticCurve, FFPmodn, Integer
 
-    E = cast(ECFF, EllipticCurve(GF(args.p), (args.a, args.b)))
-    if args.gy is None:
-        G = cast(ECFFPoint, E.lift_x(Integer(args.gx)))
-        args.gy = int(G[1])
-        args.G = Point(args.gx, args.gy)
+    p = int(args.p)
+    a = int(args.a)
+    b = int(args.b)
+    gx, gy = int(args.gx), int(args.gy) if args.gy is not None else None
+    px, py = int(args.px), int(args.py) if args.py is not None else None
+    res: int | set[int]
+
+    print("* Computing curve discriminant...")
+    F = cast(FFPmodn, GF(p))
+    x = F["x"].gen()
+    f = x**3 + a * x + b
+    d = int(f.discriminant())
+    print("* Discriminant:", d)
+
+    if d == 0:
+        print("The curve is singular!")
+        print()
+        print("Trying singular attack...")
+        try:
+            res = singular_attack(f, gx, gy, px, py)
+            print("* Singular attack succeded!")
+            return res
+        except ValueError as e:
+            print("* Singular attack failed:", e)
+            return None
+
+    print("This is a valid elliptic curve (non-singular)")
+    print()
+    E = cast(ECFF, EllipticCurve(F, (a, b)))
+    if gy is None:
+        G = cast(ECFFPoint, E.lift_x(Integer(gx)))
+        args.gy = gy = int(G[1])
+        args.G = Point(gx, gy)
     else:
         G = cast(ECFFPoint, E(args.G))
-    if args.py is None:
-        P = cast(ECFFPoint, E.lift_x(Integer(args.px)))
-        args.py = int(P[1])
-        args.P = Point(args.px, args.py)
+    if py is None:
+        P = cast(ECFFPoint, E.lift_x(Integer(px)))
+        args.py = py = int(P[1])
+        args.P = Point(px, py)
     else:
         P = cast(ECFFPoint, E(args.P))
 
@@ -182,27 +210,27 @@ def do_attacks(args: Namespace) -> int | None:
     print()
     print("Trying MOV attack...")
     try:
-        n = mov_attack(G, P)
+        res = mov_attack(G, P)
         print("* MOV attack succeded!")
-        return n
+        return res
     except ValueError as e:
         print("* MOV attack failed:", e)
 
     print()
     print("Trying Smart attack...")
     try:
-        n = smart_attack(G, P)
+        res = smart_attack(G, P)
         print("* Smart attack succeded!")
-        return n
+        return res
     except ValueError as e:
         print("* Smart attack failed:", e)
 
     print()
     print("Trying Pohlig-Hellman attack...")
     try:
-        n = pohlig_hellman_attack(G, P, args.max_bits)
+        res = pohlig_hellman_attack(G, P, args.max_bits)
         print("* Pohlig-Hellman attack succeded!")
-        return n
+        return res
     except ValueError as e:
         print("* Pohlig-Hellman attack failed:", e)
 
@@ -222,30 +250,40 @@ def main() -> None:
     else:
         print(f"Target point P: {args.P}")
 
-    n = do_attacks(args)
-    if n is None:
+    res = do_attacks(args)
+    if res is None:
         print("No attack succeeded :(")
         return
 
     print()
     print("Discrete logarithm: P = n * G")
-    print(f"{n = }")
 
-    if args.decrypt or args.decrypt_aes is not None:
+    if isinstance(res, set):
+        if len(res) == 0:
+            print("Attack returned no possible values :(")
+            return
+        if len(res) > 1:
+            print("Multiple possible values found for n:")
+    else:
+        res = {res}
+
+    for n in res:
         print()
-        if args.decrypt:
-            print("* Decrypting secret directly...")
-            decrypted = long_to_bytes(n)
-        else:
-            print(f"* Decrypting AES with Diffie-Hellman (hashing scheme: {args.hash.upper()})...")
-            decrypted = decrypt_diffie_hellman(args, n)
+        print(f"{n = }")
+        if args.decrypt or args.decrypt_aes is not None:
+            if args.decrypt:
+                print("* Decrypting secret directly...")
+                decrypted = long_to_bytes(n)
+            else:
+                print(f"* Decrypting AES with Diffie-Hellman (hash: {args.hash.upper()})...")
+                decrypted = decrypt_diffie_hellman(args, n)
 
-        try:
-            print("Decrypted message:", decrypted.decode())
-        except UnicodeDecodeError:
-            print("Warning: decrypted message is not a valid UTF-8 string")
-            print("Raw bytes:", decrypted)
-            print("Hex:", decrypted.hex())
+            try:
+                print("Decrypted message:", decrypted.decode())
+            except UnicodeDecodeError:
+                print("Warning: decrypted message is not a valid UTF-8 string")
+                print("* Raw bytes:", decrypted)
+                print("* Hex:", decrypted.hex())
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from sage.rings.finite_rings.finite_field_prime_modn import FiniteField_prime_mo
 from sage.rings.integer import Integer
 from sage.rings.padics.factory import Qp
 from sage.rings.polynomial.polynomial_element import Polynomial
+from sage.rings.polynomial.polynomial_ring import PolynomialRing_dense_mod_p as PRmodp
 from sage.rings.polynomial.polynomial_ring import PolynomialRing_integral_domain as PRID
 from sage.schemes.elliptic_curves.constructor import EllipticCurve
 from sage.schemes.elliptic_curves.ell_finite_field import EllipticCurve_finite_field as ECFF
@@ -20,6 +21,7 @@ __all__ = [
     "Integer",
     "Qp",
     "Polynomial",
+    "PRmodp",
     "PRID",
     "EllipticCurve",
     "ECFF",

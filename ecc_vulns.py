@@ -57,7 +57,17 @@ def parse_args() -> Namespace:
     grp_d = parser.add_argument_group(
         "Decryption", description="Decrypt plain secret or AES with Diffie-Hellman"
     )
-    grp_d.add_argument("--decrypt", "-d", type=hexstr_to_bytes, help="Ciphertext to decrypt")
+    grp_dx = grp_d.add_mutually_exclusive_group()
+    grp_dx.add_argument(
+        "--decrypt", "-d", action="store_true", help="Decrypt plain secret directly (as a long)"
+    )
+    grp_dx.add_argument(
+        "--decrypt-aes",
+        "-D",
+        type=hexstr_to_bytes,
+        help="Ciphertext to decrypt with AES",
+        metavar="ENCRYPTED_BYTES",
+    )
     grp_d.add_argument(
         "--iv", "-i", type=hexstr_to_bytes, help="Initialization vector (IV) for AES"
     )
@@ -110,8 +120,13 @@ def parse_args() -> Namespace:
     elif args.a is None or args.b is None:
         parser.error("supply either both -a and -b, or none of them")
 
-    if args.bx is not None and args.iv is None:
-        parser.error("AES decryption requires an IV (--iv)")
+    if args.decrypt_aes is not None:
+        if args.iv is None:
+            parser.error("AES decryption requires an IV (--iv)")
+        if args.bx is None:
+            parser.error(
+                "AES decryption requires a public key B (-B, or -bx (and optionally -by))"
+            )
 
     if isinstance(args.G, Point) and not args.G.on_curve(args.a, args.b, args.p):
         parser.error("G is not on the curve")
@@ -212,15 +227,17 @@ def main() -> None:
         print("No attack succeeded :(")
         return
 
+    print()
     print("Discrete logarithm: P = n * G")
     print(f"{n = }")
 
-    if args.decrypt is not None:
-        if args.bx is None:
-            print("Decrypting secret directly...")
+    if args.decrypt or args.decrypt_aes is not None:
+        print()
+        if args.decrypt:
+            print("* Decrypting secret directly...")
             decrypted = long_to_bytes(n)
         else:
-            print(f"Decrypting AES with Diffie-Hellman (hashing scheme: {args.hash.upper()})...")
+            print(f"* Decrypting AES with Diffie-Hellman (hashing scheme: {args.hash.upper()})...")
             decrypted = decrypt_diffie_hellman(args, n)
 
         try:

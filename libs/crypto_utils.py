@@ -2,7 +2,8 @@ import hashlib
 from typing import NewType, Protocol, SupportsIndex
 
 from Crypto.Cipher import AES
-from Crypto.Util.number import bytes_to_long, long_to_bytes
+from Crypto.Util.number import bytes_to_long as bytes_to_long
+from Crypto.Util.number import long_to_bytes as long_to_bytes
 
 Buffer = bytes | bytearray | memoryview
 HexStr = NewType("HexStr", str)
@@ -84,3 +85,8 @@ def decrypt_aes_hash(encrypted: Buffer, secret: int, iv: Buffer, hsh: str = "SHA
 
 def sha1_long(data: str) -> int:
     return bytes_to_long(hashlib.sha1(data.encode()).digest())
+
+
+def check_hash_type(hsh: str) -> str:
+    hashlib.new(hsh)
+    return hsh.upper()

@@ -3,13 +3,20 @@
 from argparse import ArgumentParser, ArgumentTypeError, Namespace
 from typing import cast
 
-from libs.crypto_utils import decrypt_aes_hash, hexstr_to_bytes
+from libs.crypto_utils import check_hash_type, decrypt_aes_hash, hexstr_to_bytes, long_to_bytes
 from libs.ecc_utils import Point, calc_curve_params, parse_int
 
 
 def my_int(value: str) -> int:
     try:
         return parse_int(value)
+    except ValueError as e:
+        raise ArgumentTypeError(str(e))
+
+
+def hash_(value: str) -> str:
+    try:
+        return check_hash_type(value)
     except ValueError as e:
         raise ArgumentTypeError(str(e))
 
@@ -47,9 +54,16 @@ def parse_args() -> Namespace:
     grp_ph = parser.add_argument_group("Pohlig-Hellman attack")
     grp_ph.add_argument("--max-bits", "-m", type=int, default=48, help="Maximum factor bit length")
 
-    grp_d = parser.add_argument_group("Decryption", description="Decrypt AES with Diffie-Hellman")
+    grp_d = parser.add_argument_group(
+        "Decryption", description="Decrypt plain secret or AES with Diffie-Hellman"
+    )
     grp_d.add_argument("--decrypt", "-d", type=hexstr_to_bytes, help="Ciphertext to decrypt")
-    grp_d.add_argument("--iv", "-i", type=hexstr_to_bytes, help="Initialization vector (IV)")
+    grp_d.add_argument(
+        "--iv", "-i", type=hexstr_to_bytes, help="Initialization vector (IV) for AES"
+    )
+    grp_d.add_argument(
+        "--hash", "-H", type=hash_, default="SHA1", help="Hash function for AES (default: SHA1)"
+    )
     grp_b = parser.add_argument_group(
         "Extra point B (Bob's public key) - Optional, only used in Diffie-Hellman decryption",
         "Supply either -B, or -bx (and optionally -by)",
@@ -96,11 +110,8 @@ def parse_args() -> Namespace:
     elif args.a is None or args.b is None:
         parser.error("supply either both -a and -b, or none of them")
 
-    if args.decrypt is not None:
-        if args.iv is None:
-            parser.error("decryption requires an IV (--iv)")
-        if args.bx is None:
-            parser.error("decryption requires a public key B (-B, or -bx (and optionally -by))")
+    if args.bx is not None and args.iv is None:
+        parser.error("AES decryption requires an IV (--iv)")
 
     if isinstance(args.G, Point) and not args.G.on_curve(args.a, args.b, args.p):
         parser.error("G is not on the curve")
@@ -126,7 +137,7 @@ def decrypt_diffie_hellman(args: Namespace, n: int) -> bytes:
     shared_secret = int(S[0])
     print("* Shared secret:", shared_secret)
 
-    return decrypt_aes_hash(args.decrypt, shared_secret, args.iv)
+    return decrypt_aes_hash(args.decrypt, shared_secret, args.iv, args.hash)
 
 
 def do_attacks(args: Namespace) -> int | None:
@@ -205,8 +216,19 @@ def main() -> None:
     print(f"{n = }")
 
     if args.decrypt is not None:
-        decrypted = decrypt_diffie_hellman(args, n)
-        print("Decrypted message:", decrypted.decode())
+        if args.bx is None:
+            print("Decrypting secret directly...")
+            decrypted = long_to_bytes(n)
+        else:
+            print(f"Decrypting AES with Diffie-Hellman (hashing scheme: {args.hash.upper()})...")
+            decrypted = decrypt_diffie_hellman(args, n)
+
+        try:
+            print("Decrypted message:", decrypted.decode())
+        except UnicodeDecodeError:
+            print("Warning: decrypted message is not a valid UTF-8 string")
+            print("Raw bytes:", decrypted)
+            print("Hex:", decrypted.hex())
 
 
 if __name__ == "__main__":

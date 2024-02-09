@@ -23,7 +23,7 @@ def smart_attack(G: ECFFPoint, P: ECFFPoint) -> int:
     print("* Ring order: p = #Fp =", p)
     print("* Computing curve order...")
     curve_order = E.order()
-    print("* Order: #E(FP) =", curve_order)
+    print("* Order: #E(Fp) =", curve_order)
     if curve_order != p:
         raise ValueError("Curve is not anomalous (Smart attack requires #E(Fp) = p)")
 

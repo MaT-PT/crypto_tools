@@ -13,6 +13,7 @@ def pohlig_hellman_attack(G: ECFFPoint, P: ECFFPoint, size_limit: int = 48) -> i
     n = Integer(cast(ECFF, G.curve()).order())
     print("* Order:", n)
 
+    print("* Factoring order...")
     factors = n.factor()
     factors.sort()
     print("* Factors:", factors)

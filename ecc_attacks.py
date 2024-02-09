@@ -148,7 +148,7 @@ def decrypt_diffie_hellman(args: Namespace, n: int) -> bytes:
     shared_secret = int(S[0])
     print("* Shared secret:", shared_secret)
 
-    return decrypt_aes_hash(args.decrypt, shared_secret, args.iv, args.hash)
+    return decrypt_aes_hash(args.decrypt_aes, shared_secret, args.iv, args.hash)
 
 
 def do_attacks(args: Namespace) -> int | set[int] | None:

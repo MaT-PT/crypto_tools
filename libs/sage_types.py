@@ -1,5 +1,6 @@
 from sage.all import GF, ZZ
 from sage.arith.misc import CRT_list
+from sage.groups.generic import discrete_log_lambda
 from sage.rings.finite_rings.finite_field_prime_modn import FiniteField_prime_modn as FFPmodn
 from sage.rings.integer import Integer
 from sage.rings.padics.factory import Qp
@@ -17,6 +18,7 @@ __all__ = [
     "GF",
     "ZZ",
     "CRT_list",
+    "discrete_log_lambda",
     "FFPmodn",
     "Integer",
     "Qp",

@@ -14,6 +14,13 @@ def my_int(value: str) -> int:
         raise ArgumentTypeError(str(e))
 
 
+def pos_int(value: str) -> int:
+    n = my_int(value)
+    if n < 0:
+        raise ArgumentTypeError("should not be a negative integer")
+    return n
+
+
 def hash_(value: str) -> str:
     try:
         return check_hash_type(value)
@@ -51,8 +58,14 @@ def parse_args() -> Namespace:
     grp_px.add_argument("-px", type=my_int, help="P x coordinate", metavar="Px")
     grp_p.add_argument("-py", type=my_int, help="P y coordinate (optional)", metavar="Py")
 
-    grp_ph = parser.add_argument_group("Pohlig-Hellman attack")
-    grp_ph.add_argument("--max-bits", "-m", type=int, default=48, help="Maximum factor bit length")
+    grp_ph = parser.add_argument_group(
+        "Pohlig-Hellman attack",
+        "Supplying --max-n-bits will enable trying Pollard's Lambda "
+        "algorithm if partial P-H attack didn't succeed",
+    )
+    grp_ph.add_argument("--max-bits", "-m", type=pos_int, default=48, help="Max factor bit length")
+    grp_ph.add_argument("--max-n-bits", "-M", type=pos_int, default=0, help="Max bit length for n")
+    grp_ph.add_argument("--min-n-bits", "-L", type=pos_int, default=1, help="Min bit length for n")
 
     grp_d = parser.add_argument_group(
         "Decryption", description="Decrypt plain secret or AES, with or without Diffie-Hellman"
@@ -123,6 +136,12 @@ def parse_args() -> Namespace:
     if args.decrypt_aes is not None and args.iv is None:
         parser.error("AES decryption requires an IV (--iv)")
 
+    if args.max_n_bits != 0:
+        if args.min_n_bits <= 0:
+            parser.error("--min-n-bits/-L must be > 0")
+        if args.min_n_bits > args.max_n_bits:
+            parser.error("--min-n-bits/-L must be less than or equal to --max-n-bits/-M")
+
     if isinstance(args.G, Point) and not args.G.on_curve(args.a, args.b, args.p):
         parser.error("G is not on the curve")
     if isinstance(args.P, Point) and not args.P.on_curve(args.a, args.b, args.p):
@@ -143,6 +162,8 @@ def decrypt_diffie_hellman(args: Namespace, n: int) -> bytes:
         B = cast(ECFFPoint, E.lift_x(Integer(args.bx)))
     else:
         B = cast(ECFFPoint, E(args.B))
+
+    print("B:", B)
 
     S = B * n
     shared_secret = int(S[0])
@@ -224,7 +245,7 @@ def do_attacks(args: Namespace) -> int | set[int] | None:
     print()
     print("Trying Pohlig-Hellman attack...")
     try:
-        res = pohlig_hellman_attack(G, P, args.max_bits)
+        res = pohlig_hellman_attack(G, P, args.max_bits, args.max_n_bits, args.min_n_bits)
         print("* Pohlig-Hellman attack succeded!")
         return res
     except ValueError as e:

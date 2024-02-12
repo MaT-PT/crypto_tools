@@ -1,9 +1,12 @@
+from math import prod
 from typing import cast
 
-from ..sage_types import ECFF, CRT_list, ECFFPoint, Integer
+from ..sage_types import ECFF, CRT_list, ECFFPoint, Integer, discrete_log_lambda
 
 
-def pohlig_hellman_attack(G: ECFFPoint, P: ECFFPoint, size_limit: int = 48) -> int:
+def pohlig_hellman_attack(
+    G: ECFFPoint, P: ECFFPoint, size_limit: int = 48, max_n_bits: int = 0, min_n_bits: int = 1
+) -> int:
     """Try solving the discrete logarithm problem using the Pohlig-Hellman algorithm.
     Try with factors of increasing size until the log is found
     (CRT can give the right result even if not all factors are computed).
@@ -20,6 +23,7 @@ def pohlig_hellman_attack(G: ECFFPoint, P: ECFFPoint, size_limit: int = 48) -> i
 
     mods: list[Integer] = []
     logs: list[Integer] = []
+    crt = 0
 
     for p, e in factors:
         nbits = p.nbits()
@@ -46,4 +50,25 @@ def pohlig_hellman_attack(G: ECFFPoint, P: ECFFPoint, size_limit: int = 48) -> i
             print("  * Found n!")
             return int(crt)
 
-    raise ValueError("Found no solution for ECDLP, try increasing the bit size limit (--max-bits)")
+    if max_n_bits > 0:
+        print("* Could not find log directly, trying with Pollard's Lambda algorithm...")
+        mod = prod(mods)
+        print("  * Partial mod:", mod)
+        GP_ = P - G * crt
+        G_ = G * mod
+        lower_bound = (1 << (min_n_bits - 1)) // mod or 1
+        upper_bound = (1 << max_n_bits) // mod + 1
+        print(f"  * Lower bound: {lower_bound}")
+        print(f"  * Upper bound: {upper_bound}")
+        log = discrete_log_lambda(GP_, G_, (lower_bound, upper_bound), operation="+")
+        print("* Pollard's Lambda found log:", log)
+        n_p = (log * mod + crt) % n
+
+        if n_p * G != P:
+            raise ValueError(f"n * G != P (n = {n_p})")
+        return int(n_p)
+    else:
+        raise ValueError(
+            "Found no solution for ECDLP, try increasing the factor bit size limit "
+            "(--max-bits) or giving a max bit size for n, if known (--max-n-bits)"
+        )

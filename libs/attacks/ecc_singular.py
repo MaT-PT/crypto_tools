@@ -1,7 +1,7 @@
 from itertools import product
 from typing import cast
 
-from ..sage_types import Integer, Polynomial, PRmodp, FFPmodn
+from ..sage_types import FFPmodn, Integer, Polynomial, PRmodp
 
 
 def singular_attack(f: Polynomial, gx: int, gy: int | None, px: int, py: int | None) -> set[int]:
@@ -61,12 +61,15 @@ def singular_attack(f: Polynomial, gx: int, gy: int | None, px: int, py: int | N
 
     for gy_, py_ in product(gys, pys):
         if multiple_solutions:
-            print(f"* Trying Gy = {gy_}; Py = {py_}")
+            print(f"* Computing discrete log for Gy = {gy_}; Py = {py_}...")
+        else:
+            print(f"* Computing discrete log...")
         u = (gy_ + t * gx_) / (gy_ - t * gx_)
         v = (py_ + t * px_) / (py_ - t * px_)
 
-        print(f"{'  ' if multiple_solutions else ''}* Computing discrete log...")
         n = v.log(u)
+        if multiple_solutions:
+            print(f"  * n = {n}")
         logs.add(int(n))
 
     return logs

@@ -1,7 +1,7 @@
 from math import prod
 from typing import cast
 
-from ..sage_types import ECFF, CRT_list, ECFFPoint, Integer, discrete_log_lambda
+from ..sage_types import CRT_list, ECFFPoint, Integer, discrete_log_lambda
 
 
 def pohlig_hellman_attack(
@@ -12,8 +12,8 @@ def pohlig_hellman_attack(
     (CRT can give the right result even if not all factors are computed).
     Stop when the size of the factors exceeds `size_limit` bits
     (computation time increases with the square root of the factor's size)."""
-    print("* Computing curve order...")
-    n = Integer(cast(ECFF, G.curve()).order())
+    print("* Computing order of G...")
+    n = G.order()
     print("* Order:", n)
 
     print("* Factoring order...")

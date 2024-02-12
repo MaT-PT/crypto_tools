@@ -4,6 +4,8 @@ from typing import cast
 from ..sage_types import ECFF, GF, ECFFPoint, EllipticCurve
 from ..types import SupportsLog
 
+MAX_DEGREE = 20
+
 
 def embedding_degree(E: ECFF, max_k: int) -> int:
     """Compute the embedding degree `k` of the curve `E` (return -1 if `k > max_k`)"""
@@ -21,10 +23,10 @@ def mov_attack(G: ECFFPoint, P: ECFFPoint) -> int:
     """Try solving the discrete logarithm problem using the MOV attack"""
     E = cast(ECFF, G.curve())
     print("* Computing embedding degree k of E...")
-    k = embedding_degree(E, 6)
-    print("* k =", k)
-    if k < 0:
-        raise ValueError("E is not supersingular")
+    k = embedding_degree(E, MAX_DEGREE)
+    print("* k", f"> {MAX_DEGREE}" if k < 0 else f"= {k}")
+    if k < 0 or k > 6:
+        raise ValueError("E is not supersingular (need k <= 6)")
 
     a, b = E.a4(), E.a6()
     q = E.base_field().order()

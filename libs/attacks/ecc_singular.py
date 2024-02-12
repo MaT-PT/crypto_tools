@@ -1,12 +1,17 @@
 from itertools import product
 from typing import cast
 
-from ..sage_types import Integer, Polynomial, PRmodp
+from ..sage_types import Integer, Polynomial, PRmodp, FFPmodn
 
 
 def singular_attack(f: Polynomial, gx: int, gy: int | None, px: int, py: int | None) -> set[int]:
+    P = cast(PRmodp, f.parent())
+
     if gy is None:
-        gys: set[Integer] = set(f(gx).sqrt(all=True))
+        try:
+            gys: set[Integer] = set(f(gx).sqrt(all=True))
+        except NotImplementedError:
+            gys = set()
         if len(gys) == 0:
             raise ValueError("Could not find Gy, try specifying it manually")
         else:
@@ -14,32 +19,46 @@ def singular_attack(f: Polynomial, gx: int, gy: int | None, px: int, py: int | N
     else:
         gys = {Integer(gy)}
     if py is None:
-        pys: set[Integer] = set(f(px).sqrt(all=True))
+        try:
+            pys: set[Integer] = set(f(px).sqrt(all=True))
+        except NotImplementedError:
+            pys = set()
         if len(pys) == 0:
             raise ValueError("Could not find Py, try specifying it manually")
         else:
             print("* Found multiple candidates for Py:", pys)
     else:
         pys = {Integer(py)}
+    multiple_solutions = len(gys) > 1 or len(pys) > 1
+
+    logs: set[int] = set()
 
     print("* Computing roots...")
     roots: list[tuple[Integer, int]] = f.roots()
-    root = next((r for r, m in roots if m == 2), None)
+    root, mult = next(((r, int(m)) for r, m in roots if m > 1), (None, 0))
     if root is None:
-        print("* No double root:", roots)
-        raise ValueError("Could not find double root")
-    print("* Found double root:", root)
+        print("* No multiple root:", roots)
+        raise ValueError("Could not find multiple root")
+    print(f"* Found root with multiplicity {mult}: {root}")
+    if not mult in (2, 3):
+        raise ValueError("Only double and triple roots are supported")
 
-    x = cast(PRmodp, f.parent()).gen()
-
-    f_ = f.substitute(x=x + root)
-    print("* Substituted polynomial:", f_)
-    t = f_[2].sqrt()
     gx_ = gx - root
     px_ = px - root
 
-    logs: set[int] = set()
-    multiple_solutions = len(gys) > 1 or len(pys) > 1
+    if mult == 3:
+        print("* Singular point is a cusp (triple root)")
+        F = cast(FFPmodn, P.base_ring())
+        for gy_, py_ in product(gys, pys):
+            n = (F(px_) / F(py_)) / (F(gx_) / F(gy_))
+            logs.add(int(n))
+        return logs
+
+    x = P.gen()
+    f_ = f.substitute(x=x + root)
+    print("* Substituted polynomial:", f_)
+    t = f_[2].sqrt()
+
     for gy_, py_ in product(gys, pys):
         if multiple_solutions:
             print(f"* Trying Gy = {gy_}; Py = {py_}")

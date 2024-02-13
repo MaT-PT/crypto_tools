@@ -5,7 +5,7 @@ from typing import cast
 
 from libs.argparse_utils import parse_args
 from libs.crypto_utils import decrypt_aes_hash, long_to_bytes
-from libs.ecc_utils import Point
+from libs.ecc_utils import Point, discriminant
 
 
 def decrypt_diffie_hellman(args: Namespace, n: int) -> bytes:
@@ -28,22 +28,25 @@ def decrypt_diffie_hellman(args: Namespace, n: int) -> bytes:
 
 
 def do_attacks(args: Namespace) -> int | set[int] | None:
+    a_invs = (int(args.a1), int(args.a2), int(args.a3), int(args.a4), int(args.a6))
+    a1, a2, a3, a4, a6 = a_invs
+    print(f"* Curve: y^2 + {a1}*x*y + {a3}*y = x^3 + {a2}*x^2 + {a4}*x + {a6}")
     print("* Importing libs...")
     from libs.attacks import mov_attack, pohlig_hellman_attack, singular_attack, smart_attack
     from libs.sage_types import ECFF, GF, ECFFPoint, EllipticCurve, FFPmodn, Integer
 
     p = int(args.p)
-    a = int(args.a)
-    b = int(args.b)
+    try:
+        F = cast(FFPmodn, GF(p))
+    except ValueError as e:
+        print(f"Error: {e}")
+        return None
     gx, gy = int(args.gx), int(args.gy) if args.gy is not None else None
     px, py = int(args.px), int(args.py) if args.py is not None else None
     res: int | set[int]
 
     print("* Computing curve discriminant...")
-    F = cast(FFPmodn, GF(p))
-    x = F["x"].gen()
-    f = x**3 + a * x + b
-    d = int(f.discriminant())
+    d = discriminant(a_invs, p)
     print("* Discriminant:", d)
 
     if d == 0:
@@ -51,16 +54,24 @@ def do_attacks(args: Namespace) -> int | set[int] | None:
         print()
         print("Trying singular attack...")
         try:
-            res = singular_attack(f, gx, gy, px, py)
+            res = singular_attack(a_invs, F, gx, gy, px, py)
             print("* Singular attack succeded!")
             return res
         except ValueError as e:
             print("* Singular attack failed:", e)
             return None
+        except KeyboardInterrupt:
+            print("* Singular attack was interrupted by user")
+            return None
 
     print("This is a valid elliptic curve (non-singular)")
     print()
-    E = cast(ECFF, EllipticCurve(F, (a, b)))
+    try:
+        E = cast(ECFF, EllipticCurve(F, a_invs))
+    except ValueError as e:
+        print(f"Error: {e}")
+        return None
+
     if gy is None:
         G = cast(ECFFPoint, E.lift_x(Integer(gx)))
         args.gy = gy = int(G[1])
@@ -87,6 +98,8 @@ def do_attacks(args: Namespace) -> int | set[int] | None:
         return res
     except ValueError as e:
         print("* MOV attack failed:", e)
+    except KeyboardInterrupt:
+        print("* MOV attack was interrupted by user")
 
     print()
     print("Trying Smart attack...")
@@ -96,6 +109,8 @@ def do_attacks(args: Namespace) -> int | set[int] | None:
         return res
     except ValueError as e:
         print("* Smart attack failed:", e)
+    except KeyboardInterrupt:
+        print("* Smart attack was interrupted by user")
 
     print()
     print("Trying Pohlig-Hellman attack...")
@@ -105,6 +120,8 @@ def do_attacks(args: Namespace) -> int | set[int] | None:
         return res
     except ValueError as e:
         print("* Pohlig-Hellman attack failed:", e)
+    except KeyboardInterrupt:
+        print("* Pohlig-Hellman attack was interrupted by user")
 
     return None
 
@@ -112,7 +129,6 @@ def do_attacks(args: Namespace) -> int | set[int] | None:
 def main() -> None:
     args = parse_args()
 
-    print(f"Curve: y^2 = x^3 + {args.a}x + {args.b} (mod {args.p})")
     if args.G is None:
         print("Generator point G: Gx =", args.gx)
     else:

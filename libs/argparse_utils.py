@@ -28,16 +28,21 @@ def hash_(value: str) -> str:
 def parse_args() -> Namespace:
     parser = ArgumentParser(
         description="A collection of elliptic curve cryptography vulnerabilities.\n"
-        "Try to find the discrete logarithm of a point P on the curve y^2 = x^3 + ax + b (mod p) "
-        "given the generator point G (that is, find n in P = n * G)."
+        "Try to find the discrete logarithm of a point P on an elliptic curve "
+        "given the generator point G (that is, find n such that P = n * G)."
     )
 
     grp_curve = parser.add_argument_group(
-        "Elliptic curve parameters", "Curve has equation y^2 = x^3 + ax + b (mod p)"
+        "Elliptic curve parameters",
+        "Curve has equation y^2 + a1*x*y + a3*y = x^3 + a2*x^2 + a4*x + a6 (mod p) "
+        "(or y^2 = x^3 + a*x + b (mod p))",
     )
-    grp_curve.add_argument("-a", type=my_int, help="Curve parameter a (optional)", metavar="a")
-    grp_curve.add_argument("-b", type=my_int, help="Curve parameter b (optional)", metavar="b")
     grp_curve.add_argument("-p", type=my_int, help="Prime modulus", metavar="p", required=True)
+    grp_curve.add_argument("-a1", type=my_int, help="Param a1 (optional)", metavar="a1")
+    grp_curve.add_argument("-a2", type=my_int, help="Param a2 (optional)", metavar="a2")
+    grp_curve.add_argument("-a3", type=my_int, help="Param a3 (optional)", metavar="a3")
+    grp_curve.add_argument("-a4", "-a", type=my_int, help="Param a4 (a) (optional)", metavar="a4")
+    grp_curve.add_argument("-a6", "-b", type=my_int, help="Param a6 (b) (optional)", metavar="a6")
 
     grp_g = parser.add_argument_group(
         "Generator point G", "Supply either -G, or -gx (and optionally -gy)"
@@ -94,7 +99,7 @@ def parse_args() -> Namespace:
     grp_b.add_argument("-by", type=my_int, help="B y coordinate (optional)", metavar="By")
 
     parser.epilog = (
-        "If a and b are known, Gy and Py can be omitted (and vice versa).\n"
+        "If curve parameters are known, Gy and Py can be omitted (and vice versa).\n"
         "Points that are fully specified will be checked to be on the curve."
     )
 
@@ -107,9 +112,11 @@ def parse_args() -> Namespace:
     if args.B is not None:
         args.bx, args.by = args.B
 
-    if (args.gy is None or args.py is None) and (args.a is None or args.b is None):
+    has_curve_param = any(a is not None for a in (args.a1, args.a2, args.a3, args.a4, args.a6))
+
+    if (args.gy is None or args.py is None) and not has_curve_param:
         parser.error(
-            "the following arguments are required: (-a and -b) or ((-G or -gy) and (-P or -py))"
+            "either give curve params (-a1, -a2, -a3, -a4/-a, -a6/-b), or fully specify G and P"
         )
 
     if args.G is None and args.gx is not None and args.gy is not None:
@@ -119,16 +126,20 @@ def parse_args() -> Namespace:
     if args.B is None and args.bx is not None and args.by is not None:
         args.B = Point(args.bx, args.by)
 
-    if args.a is None and args.b is None:
+    if not has_curve_param:
         try:
-            args.a, args.b = calc_curve_params(args.p, args.P, args.G)
+            args.a4, args.a6 = calc_curve_params(args.p, args.P, args.G)
             print("Calculated curve parameters:")
-            print(f"* a = {args.a}")
-            print(f"* b = {args.b}")
+            print(f"* a = {args.a4}")
+            print(f"* b = {args.a6}")
         except (ValueError, AssertionError) as e:
-            parser.error("could not calculate curve parameters: " + str(e))
-    elif args.a is None or args.b is None:
-        parser.error("supply either both -a and -b, or none of them")
+            parser.error(f"could not calculate curve parameters: {e}")
+
+    a1 = args.a1 = args.a1 or 0
+    a2 = args.a2 = args.a2 or 0
+    a3 = args.a3 = args.a3 or 0
+    a4 = args.a4 = args.a = args.a4 or 0
+    a6 = args.a6 = args.b = args.a6 or 0
 
     if args.decrypt_aes is not None and args.iv is None:
         parser.error("AES decryption requires an IV (--iv)")
@@ -139,12 +150,15 @@ def parse_args() -> Namespace:
         if args.min_n_bits > args.max_n_bits:
             parser.error("--min-n-bits/-L must be less than or equal to --max-n-bits/-M")
 
-    if isinstance(args.G, Point) and not args.G.on_curve(args.a, args.b, args.p):
+    a_invs = (a1, a2, a3, a4, a6)
+    if isinstance(args.G, Point) and not args.G.on_curve(a_invs, args.p):
         parser.error("G is not on the curve")
-    if isinstance(args.P, Point) and not args.P.on_curve(args.a, args.b, args.p):
+    if isinstance(args.P, Point) and not args.P.on_curve(a_invs, args.p):
         parser.error("P is not on the curve")
     if args.decrypt_aes is not None:
-        if isinstance(args.B, Point) and not args.B.on_curve(args.a, args.b, args.p):
+        if isinstance(args.B, Point) and not args.B.on_curve(a_invs, args.p):
             parser.error("B is not on the curve")
+
+    args.a_invs = a_invs
 
     return args

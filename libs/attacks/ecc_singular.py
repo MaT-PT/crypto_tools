@@ -1,11 +1,30 @@
 from itertools import product
 from typing import cast
 
-from ..sage_types import FFPmodn, Integer, Polynomial, PRmodp
+from ..ecc_utils import AInvs, isomorphism, long_weier_form, morph_point, short_weier_form3
+from ..sage_types import FFPmodn, Integer, PRmodp, polygen
 
 
-def singular_attack(f: Polynomial, gx: int, gy: int | None, px: int, py: int | None) -> set[int]:
-    P = cast(PRmodp, f.parent())
+def singular_attack(
+    a_invs: AInvs, F: FFPmodn, gx0: int, gy0: int | None, px0: int, py0: int | None
+) -> set[int]:
+    p = F.characteristic()
+    a1, a2, a3, a4, a6 = a_invs
+    if a1 % p == 0 and a3 % p == 0:
+        print("* Curve is already in short Weierstrass form")
+        a, b, c = a2, a4, a6
+        gx, gy = gx0, gy0
+        px, py = px0, py0
+    else:
+        a, b, c = short_weier_form3(a_invs, p)
+        long_form = long_weier_form((a, b, c))
+        urst = isomorphism(a_invs, long_form, p)
+        gx, gy = morph_point(urst, p, gx0, gy0)
+        px, py = morph_point(urst, p, px0, py0)
+        print(f"* Short Weierstrass form: y^2 = x^3 + {a}*x^2 + {b}*x + {c}")
+
+    x = cast(PRmodp, polygen(F, "x"))
+    f = cast(PRmodp, x**3 + a * x**2 + b * x + c)
 
     if gy is None:
         try:
@@ -35,8 +54,10 @@ def singular_attack(f: Polynomial, gx: int, gy: int | None, px: int, py: int | N
 
     print("* Computing roots...")
     roots: list[tuple[Integer, int]] = f.roots()
-    root, mult = next(((r, int(m)) for r, m in roots if m > 1), (None, 0))
-    if root is None:
+    if len(roots) == 0:
+        raise ValueError("Could not find any roots")
+    root, mult = max(roots, key=lambda r_m: r_m[1])
+    if mult < 2:
         print("* No multiple root:", roots)
         raise ValueError("Could not find multiple root")
     print(f"* Found root with multiplicity {mult}: {root}")
@@ -48,13 +69,11 @@ def singular_attack(f: Polynomial, gx: int, gy: int | None, px: int, py: int | N
 
     if mult == 3:
         print("* Singular point is a cusp (triple root)")
-        F = cast(FFPmodn, P.base_ring())
         for gy_, py_ in product(gys, pys):
             n = (F(px_) / F(py_)) / (F(gx_) / F(gy_))
             logs.add(int(n))
         return logs
 
-    x = P.gen()
     f_ = f.substitute(x=x + root)
     print("* Substituted polynomial:", f_)
     t = f_[2].sqrt()

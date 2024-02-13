@@ -28,9 +28,8 @@ def mov_attack(G: ECFFPoint, P: ECFFPoint) -> int:
     if k < 0 or k > 6:
         raise ValueError("E is not supersingular (need k <= 6)")
 
-    a, b = E.a4(), E.a6()
     q = E.base_field().order()
-    Ek = cast(ECFF, EllipticCurve(GF(q**k), (a, b)))
+    Ek = cast(ECFF, EllipticCurve(GF(q**k), E.a_invariants()))
     # print("* Ek:", Ek)
 
     print("* Computing order of G...")
@@ -60,8 +59,8 @@ def mov_attack(G: ECFFPoint, P: ECFFPoint) -> int:
     print("* Computing Weil pairings...")
     u: SupportsLog = Gk.weil_pairing(B, n)
     v: SupportsLog = Pk.weil_pairing(B, n)
-    # print("* u =", u)
-    # print("* v =", v)
+    print("* u =", u)
+    print("* v =", v)
 
     print("* Computing discrete log...")
     n_p = v.log(u)

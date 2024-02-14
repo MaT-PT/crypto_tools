@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 
-from argparse import Namespace
 from typing import Callable, ParamSpec, TypeVar, cast
 
-from libs.argparse_utils import parse_args
+from libs.argparse_utils import Arguments, parse_args
 from libs.crypto_utils import decrypt_aes_hash, long_to_bytes
-from libs.ecc_utils import AInvs, Point, discriminant
+from libs.ecc_utils import Point, discriminant
 
 _P = ParamSpec("_P")
 _T = TypeVar("_T")
 
 
-def decrypt_diffie_hellman(args: Namespace, n: int) -> bytes:
-    from libs.sage_types import ECFF, ECFFPoint, Integer
+def decrypt_diffie_hellman(args: Arguments, n: int, p: int) -> bytes:
+    assert args.decrypt_aes is not None and args.iv is not None
+    from libs.sage_types import ECFF, GF, ECFFPoint, EllipticCurve, Integer
 
-    E = cast(ECFF, args.sage["E"])
+    E = cast(ECFF, EllipticCurve(GF(p), args.a_invs))
 
     if args.by is None:
         B = cast(ECFFPoint, E.lift_x(Integer(args.bx)))
@@ -54,11 +54,9 @@ def run_attack(
     return None
 
 
-def do_attacks(args: Namespace) -> int | set[int] | None:
+def run_attacks(args: Arguments, p: int) -> int | set[int] | None:
     run_all = all(not atk for atk in (args.mov, args.smart, args.ph, args.singular))
-    a1, a2, a3, a4, a6 = int(args.a1), int(args.a2), int(args.a3), int(args.a4), int(args.a6)
-    a_invs = AInvs((a1, a2, a3, a4, a6))
-    p = int(args.p)
+    a1, a2, a3, a4, a6 = a_invs = args.a_invs
     print(f"* Curve: y^2 + {a1}*x*y + {a3}*y = x^3 + {a2}*x^2 + {a4}*x + {a6} (mod {p})")
     print("* Importing libs...")
     from libs.attacks import mov_attack, pohlig_hellman_attack, singular_attack, smart_attack
@@ -69,8 +67,8 @@ def do_attacks(args: Namespace) -> int | set[int] | None:
     except ValueError as e:
         print(f"Error: {e}")
         return None
-    gx, gy = int(args.gx), int(args.gy) if args.gy is not None else None
-    px, py = int(args.px), int(args.py) if args.py is not None else None
+    gx, gy = args.gx, args.gy
+    px, py = args.px, args.py
 
     print("* Computing curve discriminant...")
     d = discriminant(a_invs, p)
@@ -106,7 +104,6 @@ def do_attacks(args: Namespace) -> int | set[int] | None:
     print("E:", E)
     print("G:", G)
     print("P:", P)
-    args.sage = {"E": E, "G": G, "P": P}
 
     res = run_attack(mov_attack, "MOV", run_all, args.mov, G, P)
     if res is not None:
@@ -145,7 +142,7 @@ def main() -> None:
     else:
         print(f"Target point P: {args.P}")
 
-    res = do_attacks(args)
+    res = run_attacks(args, args.p)
     print()
     if res is None:
         print("No attack succeeded :(")
@@ -171,10 +168,11 @@ def main() -> None:
                 decrypted = long_to_bytes(n)
             elif args.bx is None:
                 print(f"* Decrypting AES (hash: {args.hash})...")
+                assert args.decrypt_aes is not None and args.iv is not None
                 decrypted = decrypt_aes_hash(args.decrypt_aes, n, args.iv, args.hash)
             else:
                 print(f"* Decrypting AES with Diffie-Hellman (hash function: {args.hash})...")
-                decrypted = decrypt_diffie_hellman(args, n)
+                decrypted = decrypt_diffie_hellman(args, n, args.p)
 
             try:
                 print("Decrypted message:", decrypted.decode())

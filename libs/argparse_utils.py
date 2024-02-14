@@ -1,9 +1,42 @@
 from argparse import ArgumentParser, ArgumentTypeError
 from argparse import BooleanOptionalAction as BOA
-from argparse import Namespace
+from dataclasses import dataclass
 
 from .crypto_utils import check_hash_type, hexstr_to_bytes
 from .ecc_utils import AInvs, Point, calc_curve_params, parse_int
+
+
+@dataclass
+class Arguments:
+    p: int
+    a1: int
+    a2: int
+    a3: int
+    a4: int
+    a6: int
+    G: Point | None
+    gx: int
+    gy: int | None
+    P: Point | None
+    px: int
+    py: int | None
+    max_bits: int
+    max_n_bits: int
+    min_n_bits: int
+    decrypt: bool | None
+    decrypt_aes: bytes | None
+    iv: bytes | None
+    hash: str
+    B: Point | None
+    bx: int | None
+    by: int | None
+    mov: bool | None
+    smart: bool | None
+    ph: bool | None
+    singular: bool | None
+    a: int
+    b: int
+    a_invs: AInvs
 
 
 def my_int(value: str) -> int:
@@ -27,7 +60,7 @@ def hash_(value: str) -> str:
         raise ArgumentTypeError(str(e))
 
 
-def parse_args() -> Namespace:
+def parse_args() -> Arguments:
     parser = ArgumentParser(
         description="A collection of elliptic curve cryptography vulnerabilities.\n"
         "Try to find the discrete logarithm of a point P on an elliptic curve "
@@ -129,6 +162,18 @@ def parse_args() -> Namespace:
             "either give curve params (-a1, -a2, -a3, -a4/-a, -a6/-b), or fully specify G and P"
         )
 
+    if args.iv is None:
+        if args.decrypt_aes is not None:
+            parser.error("AES decryption requires an IV (--iv)")
+    elif len(args.iv) != 16:
+        parser.error("IV must be 16 bytes long")
+
+    if args.max_n_bits != 0:
+        if args.min_n_bits <= 0:
+            parser.error("--min-n-bits/-L must be > 0")
+        if args.min_n_bits > args.max_n_bits:
+            parser.error("--min-n-bits/-L must be less than or equal to --max-n-bits/-M")
+
     if args.G is None and args.gx is not None and args.gy is not None:
         args.G = Point(args.gx, args.gy)
     if args.P is None and args.px is not None and args.py is not None:
@@ -151,15 +196,6 @@ def parse_args() -> Namespace:
     a4 = args.a4 = args.a = args.a4 or 0
     a6 = args.a6 = args.b = args.a6 or 0
 
-    if args.decrypt_aes is not None and args.iv is None:
-        parser.error("AES decryption requires an IV (--iv)")
-
-    if args.max_n_bits != 0:
-        if args.min_n_bits <= 0:
-            parser.error("--min-n-bits/-L must be > 0")
-        if args.min_n_bits > args.max_n_bits:
-            parser.error("--min-n-bits/-L must be less than or equal to --max-n-bits/-M")
-
     a_invs = AInvs((a1, a2, a3, a4, a6))
     if isinstance(args.G, Point) and not args.G.on_curve(a_invs, args.p):
         parser.error("G is not on the curve")
@@ -171,4 +207,4 @@ def parse_args() -> Namespace:
 
     args.a_invs = a_invs
 
-    return args
+    return Arguments(**args.__dict__)

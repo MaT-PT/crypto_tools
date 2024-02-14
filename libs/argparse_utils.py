@@ -1,4 +1,6 @@
-from argparse import ArgumentParser, ArgumentTypeError, Namespace
+from argparse import ArgumentParser, ArgumentTypeError
+from argparse import BooleanOptionalAction as BOA
+from argparse import Namespace
 
 from .crypto_utils import check_hash_type, hexstr_to_bytes
 from .ecc_utils import Point, calc_curve_params, parse_int
@@ -97,6 +99,14 @@ def parse_args() -> Namespace:
     grp_bx.add_argument("-B", type=Point, help="B as a pair: x,y", metavar="B")
     grp_bx.add_argument("-bx", type=my_int, help="B x coordinate", metavar="Bx")
     grp_b.add_argument("-by", type=my_int, help="B y coordinate (optional)", metavar="By")
+
+    grp_a = parser.add_argument_group(
+        "Attacks", "Enabled attacks will be run on their own; disabled attacks will be skipped"
+    )
+    grp_a.add_argument("--mov", action=BOA, help="Enable/disable MOV attack")
+    grp_a.add_argument("--smart", action=BOA, help="Enable/disable Smart attack")
+    grp_a.add_argument("--ph", action=BOA, help="Enable/disable Pohlig-Hellman attack")
+    grp_a.add_argument("--singular", action=BOA, help="Enable/disable singular curve attack")
 
     parser.epilog = (
         "If curve parameters are known, Gy and Py can be omitted (and vice versa).\n"

@@ -28,6 +28,7 @@ def decrypt_diffie_hellman(args: Namespace, n: int) -> bytes:
 
 
 def do_attacks(args: Namespace) -> int | set[int] | None:
+    run_all = all(not atk for atk in (args.mov, args.smart, args.ph, args.singular))
     a_invs = (int(args.a1), int(args.a2), int(args.a3), int(args.a4), int(args.a6))
     a1, a2, a3, a4, a6 = a_invs
     print(f"* Curve: y^2 + {a1}*x*y + {a3}*y = x^3 + {a2}*x^2 + {a4}*x + {a6}")
@@ -52,17 +53,19 @@ def do_attacks(args: Namespace) -> int | set[int] | None:
     if d == 0:
         print("The curve is singular!")
         print()
-        print("Trying singular attack...")
-        try:
-            res = singular_attack(a_invs, F, gx, gy, px, py)
-            print("* Singular attack succeded!")
-            return res
-        except ValueError as e:
-            print("* Singular attack failed:", e)
-            return None
-        except KeyboardInterrupt:
-            print("* Singular attack was interrupted by user")
-            return None
+        if args.singular is not False and (run_all or args.singular):
+            print("Trying singular curve attack...")
+            try:
+                res = singular_attack(a_invs, F, gx, gy, px, py)
+                print("* Singular curve attack succeded!")
+                return res
+            except ValueError as e:
+                print("* Singular curve attack failed:", e)
+            except KeyboardInterrupt:
+                print("* Singular curve attack was interrupted by user")
+        else:
+            print("(Skipping singular curve attack)")
+        return None
 
     print("This is a valid elliptic curve (non-singular)")
     print()
@@ -91,37 +94,46 @@ def do_attacks(args: Namespace) -> int | set[int] | None:
     args.sage = {"E": E, "G": G, "P": P}
 
     print()
-    print("Trying MOV attack...")
-    try:
-        res = mov_attack(G, P)
-        print("* MOV attack succeded!")
-        return res
-    except ValueError as e:
-        print("* MOV attack failed:", e)
-    except KeyboardInterrupt:
-        print("* MOV attack was interrupted by user")
+    if args.mov is not False and (run_all or args.mov):
+        print("Trying MOV attack...")
+        try:
+            res = mov_attack(G, P)
+            print("* MOV attack succeded!")
+            return res
+        except ValueError as e:
+            print("* MOV attack failed:", e)
+        except KeyboardInterrupt:
+            print("* MOV attack was interrupted by user")
+    else:
+        print("(Skipping MOV attack)")
 
     print()
-    print("Trying Smart attack...")
-    try:
-        res = smart_attack(G, P)
-        print("* Smart attack succeded!")
-        return res
-    except ValueError as e:
-        print("* Smart attack failed:", e)
-    except KeyboardInterrupt:
-        print("* Smart attack was interrupted by user")
+    if args.smart is not False and (run_all or args.smart):
+        print("Trying Smart attack...")
+        try:
+            res = smart_attack(G, P)
+            print("* Smart attack succeded!")
+            return res
+        except ValueError as e:
+            print("* Smart attack failed:", e)
+        except KeyboardInterrupt:
+            print("* Smart attack was interrupted by user")
+    else:
+        print("(Skipping Smart attack)")
 
     print()
-    print("Trying Pohlig-Hellman attack...")
-    try:
-        res = pohlig_hellman_attack(G, P, args.max_bits, args.max_n_bits, args.min_n_bits)
-        print("* Pohlig-Hellman attack succeded!")
-        return res
-    except ValueError as e:
-        print("* Pohlig-Hellman attack failed:", e)
-    except KeyboardInterrupt:
-        print("* Pohlig-Hellman attack was interrupted by user")
+    if args.ph is not False and (run_all or args.ph):
+        print("Trying Pohlig-Hellman attack...")
+        try:
+            res = pohlig_hellman_attack(G, P, args.max_bits, args.max_n_bits, args.min_n_bits)
+            print("* Pohlig-Hellman attack succeded!")
+            return res
+        except ValueError as e:
+            print("* Pohlig-Hellman attack failed:", e)
+        except KeyboardInterrupt:
+            print("* Pohlig-Hellman attack was interrupted by user")
+    else:
+        print("(Skipping Pohlig-Hellman attack)")
 
     return None
 
@@ -139,11 +151,11 @@ def main() -> None:
         print(f"Target point P: {args.P}")
 
     res = do_attacks(args)
+    print()
     if res is None:
         print("No attack succeeded :(")
         return
 
-    print()
     print("Discrete logarithm: P = n * G")
 
     if isinstance(res, set):

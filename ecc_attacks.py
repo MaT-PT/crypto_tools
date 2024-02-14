@@ -5,7 +5,7 @@ from typing import Callable, ParamSpec, TypeVar, cast
 
 from libs.argparse_utils import parse_args
 from libs.crypto_utils import decrypt_aes_hash, long_to_bytes
-from libs.ecc_utils import Point, discriminant
+from libs.ecc_utils import AInvs, Point, discriminant
 
 _P = ParamSpec("_P")
 _T = TypeVar("_T")
@@ -56,8 +56,8 @@ def run_attack(
 
 def do_attacks(args: Namespace) -> int | set[int] | None:
     run_all = all(not atk for atk in (args.mov, args.smart, args.ph, args.singular))
-    a_invs = (int(args.a1), int(args.a2), int(args.a3), int(args.a4), int(args.a6))
-    a1, a2, a3, a4, a6 = a_invs
+    a1, a2, a3, a4, a6 = int(args.a1), int(args.a2), int(args.a3), int(args.a4), int(args.a6)
+    a_invs = AInvs((a1, a2, a3, a4, a6))
     p = int(args.p)
     print(f"* Curve: y^2 + {a1}*x*y + {a3}*y = x^3 + {a2}*x^2 + {a4}*x + {a6} (mod {p})")
     print("* Importing libs...")

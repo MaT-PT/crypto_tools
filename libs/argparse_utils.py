@@ -3,7 +3,7 @@ from argparse import BooleanOptionalAction as BOA
 from argparse import Namespace
 
 from .crypto_utils import check_hash_type, hexstr_to_bytes
-from .ecc_utils import Point, calc_curve_params, parse_int
+from .ecc_utils import AInvs, Point, calc_curve_params, parse_int
 
 
 def my_int(value: str) -> int:
@@ -160,7 +160,7 @@ def parse_args() -> Namespace:
         if args.min_n_bits > args.max_n_bits:
             parser.error("--min-n-bits/-L must be less than or equal to --max-n-bits/-M")
 
-    a_invs = (a1, a2, a3, a4, a6)
+    a_invs = AInvs((a1, a2, a3, a4, a6))
     if isinstance(args.G, Point) and not args.G.on_curve(a_invs, args.p):
         parser.error("G is not on the curve")
     if isinstance(args.P, Point) and not args.P.on_curve(a_invs, args.p):

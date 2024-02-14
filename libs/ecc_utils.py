@@ -1,13 +1,13 @@
 from functools import cache
 from string import whitespace as ws
-from typing import Iterable, Self, TypeAlias, cast
+from typing import Iterable, NewType, Self, cast
 
-AInvs: TypeAlias = tuple[int, int, int, int, int]
-AInvsShort2: TypeAlias = tuple[int, int]
-AInvsShort3: TypeAlias = tuple[int, int, int]
-BInvs: TypeAlias = tuple[int, int, int, int]
-CInvs: TypeAlias = tuple[int, int]
-URST: TypeAlias = tuple[int, int, int, int]
+AInvs = NewType("AInvs", tuple[int, int, int, int, int])
+AInvsShort2 = NewType("AInvsShort2", tuple[int, int])
+AInvsShort3 = NewType("AInvsShort3", tuple[int, int, int])
+BInvs = NewType("BInvs", tuple[int, int, int, int])
+CInvs = NewType("CInvs", tuple[int, int])
+URST = NewType("URST", tuple[int, int, int, int])
 
 
 def parse_int(value: str) -> int:
@@ -74,24 +74,24 @@ def calc_curve_params(p: int, P: Point, Q: Point) -> AInvsShort2:
     b2 = (qy2 - qx3 - a * Q.x) % p
     assert b1 == b2, "got different b values for P and Q"
 
-    return a, b1
+    return AInvsShort2((a, b1))
 
 
 @cache
 def b_invariants(a_invs: AInvs, p: int) -> BInvs:
     a1, a2, a3, a4, a6 = a_invs
-    return (
+    return BInvs((
         (a1 * a1 + 4 * a2) % p,
         (a1 * a3 + 2 * a4) % p,
         (pow(a3, 2, p) + 4 * a6) % p,
         (pow(a1, 2, p) * a6 + 4 * a2 * a6 - a1 * a3 * a4 + a2 * pow(a3, 2, p) - pow(a4, 2, p)) % p,
-    )
+    ))
 
 
 @cache
 def c_invariants(a_invs: AInvs, p: int) -> CInvs:
     b2, b4, b6, _ = b_invariants(a_invs, p)
-    return ((pow(b2, 2, p) - 24 * b4) % p, (-pow(b2, 3, p) + 36 * b2 * b4 - 216 * b6) % p)
+    return CInvs(((pow(b2, 2, p) - 24 * b4) % p, (-pow(b2, 3, p) + 36 * b2 * b4 - 216 * b6) % p))
 
 
 @cache
@@ -113,13 +113,13 @@ def j_invariant(a_invs: AInvs, p: int) -> int:
 def short_weier_form2(a_invs: AInvs, p: int) -> AInvsShort2:
     a1, a2, a3, a4, a6 = a_invs
     if a1 % p == 0 and a2 % p == 0 and a3 % p == 0:
-        return a4 % p, a6 % p
+        return AInvsShort2((a4 % p, a6 % p))
     b2, b4, b6, _ = b_invariants(a_invs, p)
     if b2 == 0:
-        return (8 * b4) % p, (16 * b6) % p
+        return AInvsShort2(((8 * b4) % p, (16 * b6) % p))
     else:
         c4, c6 = c_invariants(a_invs, p)
-        return (-27 * c4) % p, (-54 * c6) % p
+        return AInvsShort2(((-27 * c4) % p, (-54 * c6) % p))
 
 
 @cache
@@ -127,17 +127,17 @@ def short_weier_form3(a_invs: AInvs, p: int) -> AInvsShort3:
     a1, a2, a3, a4, a6 = a_invs
     b2, b4, b6, _ = b_invariants(a_invs, p)
     if a1 % p == 0 and a3 % p == 0:
-        return a2 % p, a4 % p, a6 % p
+        return AInvsShort3((a2 % p, a4 % p, a6 % p))
     else:
-        return b2 % p, (8 * b4) % p, (16 * b6) % p
+        return AInvsShort3((b2 % p, (8 * b4) % p, (16 * b6) % p))
 
 
 @cache
 def isomorphisms(E: AInvs, F: AInvs, p: int, just_one: bool = False) -> URST | list[URST] | None:
     if E == F:
         if just_one:
-            return (1, 0, 0, 0)
-        return [(1, 0, 0, 0)]
+            return URST((1, 0, 0, 0))
+        return [URST((1, 0, 0, 0))]
 
     try:
         j: int | None = j_invariant(E, p)
@@ -171,14 +171,14 @@ def isomorphisms(E: AInvs, F: AInvs, p: int, just_one: bool = False) -> URST | l
     else:
         m, um = 2, (c6E * c4F * pow(c6F * c4E, -1, p)) % p
     ulist = (x**m - um).roots(multiplicities=False)
-    ans = []
+    ans: list[URST] = []
     for u in ulist:
         s = (a1F * u - a1E) / 2
         r = (a2F * u**2 + a1E * s + s**2 - a2E) / 3
         t = (a3F * u**3 - a1E * r - a3E) / 2
         if just_one:
-            return (u, r, s, t)
-        ans.append((u, r, s, t))
+            return URST((u, r, s, t))
+        ans.append(URST((u, r, s, t)))
     if just_one:
         return None
     ans.sort()
@@ -195,23 +195,23 @@ def isomorphism(E: AInvs, F: AInvs, p: int) -> URST | None:
 @cache
 def dual_isomorphism(urst: URST, p: int) -> URST:
     u, r, s, t = urst
-    return (
+    return URST((
         pow(u, -1, p),
         (-r * pow(u, -2, p)) % p,
         (-s * pow(u, -1, p)) % p,
         (((r * s - t) % p) * pow(u, -3, p)) % p,
-    )
+    ))
 
 
 @cache
 def long_weier_form(a_invs: AInvs | AInvsShort2 | AInvsShort3) -> AInvs:
     match a_invs:
         case a, b:
-            return 0, 0, 0, a, b
+            return AInvs((0, 0, 0, a, b))
         case a, b, c:
-            return 0, a, 0, b, c
+            return AInvs((0, a, 0, b, c))
         case a1, a2, a3, a4, a6:
-            return a1, a2, a3, a4, a6
+            return AInvs((a1, a2, a3, a4, a6))
         case _:
             raise ValueError("Invalid weierstrass form")
 

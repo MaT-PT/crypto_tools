@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 
 from argparse import Namespace
-from typing import cast
+from typing import Callable, ParamSpec, TypeVar, cast
 
 from libs.argparse_utils import parse_args
 from libs.crypto_utils import decrypt_aes_hash, long_to_bytes
 from libs.ecc_utils import Point, discriminant
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
 
 
 def decrypt_diffie_hellman(args: Namespace, n: int) -> bytes:
@@ -27,16 +30,40 @@ def decrypt_diffie_hellman(args: Namespace, n: int) -> bytes:
     return decrypt_aes_hash(args.decrypt_aes, shared_secret, args.iv, args.hash)
 
 
+def run_attack(
+    attack: Callable[_P, _T],
+    name: str,
+    run_all: bool,
+    run_this: bool | None,
+    *args: _P.args,
+    **kwargs: _P.kwargs,
+) -> _T | None:
+    print()
+    if run_this is not False and (run_all or run_this):
+        print(f"Trying {name} attack...")
+        try:
+            res = attack(*args, **kwargs)
+            print(f"* {name} attack succeded!")
+            return res
+        except ValueError as e:
+            print(f"* {name} attack failed:", e)
+        except KeyboardInterrupt:
+            print(f"* {name} attack was interrupted by user")
+    else:
+        print(f"(Skipping {name} attack)")
+    return None
+
+
 def do_attacks(args: Namespace) -> int | set[int] | None:
     run_all = all(not atk for atk in (args.mov, args.smart, args.ph, args.singular))
     a_invs = (int(args.a1), int(args.a2), int(args.a3), int(args.a4), int(args.a6))
     a1, a2, a3, a4, a6 = a_invs
-    print(f"* Curve: y^2 + {a1}*x*y + {a3}*y = x^3 + {a2}*x^2 + {a4}*x + {a6}")
+    p = int(args.p)
+    print(f"* Curve: y^2 + {a1}*x*y + {a3}*y = x^3 + {a2}*x^2 + {a4}*x + {a6} (mod {p})")
     print("* Importing libs...")
     from libs.attacks import mov_attack, pohlig_hellman_attack, singular_attack, smart_attack
     from libs.sage_types import ECFF, GF, ECFFPoint, EllipticCurve, FFPmodn, Integer
 
-    p = int(args.p)
     try:
         F = cast(FFPmodn, GF(p))
     except ValueError as e:
@@ -44,7 +71,6 @@ def do_attacks(args: Namespace) -> int | set[int] | None:
         return None
     gx, gy = int(args.gx), int(args.gy) if args.gy is not None else None
     px, py = int(args.px), int(args.py) if args.py is not None else None
-    res: int | set[int]
 
     print("* Computing curve discriminant...")
     d = discriminant(a_invs, p)
@@ -52,23 +78,11 @@ def do_attacks(args: Namespace) -> int | set[int] | None:
 
     if d == 0:
         print("The curve is singular!")
-        print()
-        if args.singular is not False and (run_all or args.singular):
-            print("Trying singular curve attack...")
-            try:
-                res = singular_attack(a_invs, F, gx, gy, px, py)
-                print("* Singular curve attack succeded!")
-                return res
-            except ValueError as e:
-                print("* Singular curve attack failed:", e)
-            except KeyboardInterrupt:
-                print("* Singular curve attack was interrupted by user")
-        else:
-            print("(Skipping singular curve attack)")
-        return None
+        return run_attack(
+            singular_attack, "singular curve", run_all, args.singular, a_invs, F, gx, gy, px, py
+        )
 
     print("This is a valid elliptic curve (non-singular)")
-    print()
     try:
         E = cast(ECFF, EllipticCurve(F, a_invs))
     except ValueError as e:
@@ -88,52 +102,33 @@ def do_attacks(args: Namespace) -> int | set[int] | None:
     else:
         P = cast(ECFFPoint, E(args.P))
 
+    print()
     print("E:", E)
     print("G:", G)
     print("P:", P)
     args.sage = {"E": E, "G": G, "P": P}
 
-    print()
-    if args.mov is not False and (run_all or args.mov):
-        print("Trying MOV attack...")
-        try:
-            res = mov_attack(G, P)
-            print("* MOV attack succeded!")
-            return res
-        except ValueError as e:
-            print("* MOV attack failed:", e)
-        except KeyboardInterrupt:
-            print("* MOV attack was interrupted by user")
-    else:
-        print("(Skipping MOV attack)")
+    res = run_attack(mov_attack, "MOV", run_all, args.mov, G, P)
+    if res is not None:
+        return res
 
-    print()
-    if args.smart is not False and (run_all or args.smart):
-        print("Trying Smart attack...")
-        try:
-            res = smart_attack(G, P)
-            print("* Smart attack succeded!")
-            return res
-        except ValueError as e:
-            print("* Smart attack failed:", e)
-        except KeyboardInterrupt:
-            print("* Smart attack was interrupted by user")
-    else:
-        print("(Skipping Smart attack)")
+    res = run_attack(smart_attack, "Smart", run_all, args.smart, G, P)
+    if res is not None:
+        return res
 
-    print()
-    if args.ph is not False and (run_all or args.ph):
-        print("Trying Pohlig-Hellman attack...")
-        try:
-            res = pohlig_hellman_attack(G, P, args.max_bits, args.max_n_bits, args.min_n_bits)
-            print("* Pohlig-Hellman attack succeded!")
-            return res
-        except ValueError as e:
-            print("* Pohlig-Hellman attack failed:", e)
-        except KeyboardInterrupt:
-            print("* Pohlig-Hellman attack was interrupted by user")
-    else:
-        print("(Skipping Pohlig-Hellman attack)")
+    res = run_attack(
+        pohlig_hellman_attack,
+        "Pohlig-Hellman",
+        run_all,
+        args.ph,
+        G,
+        P,
+        args.max_bits,
+        args.max_n_bits,
+        args.min_n_bits,
+    )
+    if res is not None:
+        return res
 
     return None
 

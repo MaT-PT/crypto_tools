@@ -3,11 +3,12 @@ from typing import cast
 
 from ..ecc_utils import AInvs, isomorphism, long_weier_form, morph_point, short_weier_form3
 from ..sage_types import FFPmodn, Integer, PRmodp, polygen
+from ..types import ResultSet
 
 
 def singular_attack(
     a_invs: AInvs, F: FFPmodn, gx0: int, gy0: int | None, px0: int, py0: int | None
-) -> set[int]:
+) -> ResultSet:
     p = F.characteristic()
     a1, a2, a3, a4, a6 = a_invs
     if a1 % p == 0 and a3 % p == 0:
@@ -72,7 +73,7 @@ def singular_attack(
         for gy_, py_ in product(gys, pys):
             n = (F(px_) / F(py_)) / (F(gx_) / F(gy_))
             logs.add(int(n))
-        return logs
+        return ResultSet(logs)
 
     f_ = f.substitute(x=x + root)
     print("* Substituted polynomial:", f_)
@@ -91,4 +92,4 @@ def singular_attack(
             print(f"  * n = {n}")
         logs.add(int(n))
 
-    return logs
+    return ResultSet(logs)

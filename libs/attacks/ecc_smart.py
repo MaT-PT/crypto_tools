@@ -1,6 +1,7 @@
 from typing import cast
 
 from ..sage_types import ECFF, ECPF, ZZ, ECFFPoint, ECFPoint, EllipticCurve, FFPmodn, Qp
+from ..types import ResultSet
 
 
 def hensel_lift(E: ECPF, P: ECFFPoint) -> ECFPoint | None:
@@ -15,7 +16,7 @@ def hensel_lift(E: ECPF, P: ECFFPoint) -> ECFPoint | None:
     return None
 
 
-def smart_attack(G: ECFFPoint, P: ECFFPoint) -> int:
+def smart_attack(G: ECFFPoint, P: ECFFPoint) -> ResultSet:
     """Try solving the discrete logarithm problem using Smart's attack"""
     E = cast(ECFF, G.curve())
     Fp = cast(FFPmodn, E.base_ring())
@@ -50,4 +51,4 @@ def smart_attack(G: ECFFPoint, P: ECFFPoint) -> int:
 
     if n * G != P:
         raise ValueError(f"n * G != P ({n = })")
-    return n
+    return ResultSet(n, int(p))

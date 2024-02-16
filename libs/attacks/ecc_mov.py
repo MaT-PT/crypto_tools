@@ -2,7 +2,7 @@ import math
 from typing import cast
 
 from ..sage_types import ECFF, GF, ECFFPoint, EllipticCurve
-from ..types import SupportsLog
+from ..types import ResultSet, SupportsLog
 
 MAX_DEGREE = 20
 
@@ -19,7 +19,7 @@ def embedding_degree(E: ECFF, max_k: int) -> int:
     return k
 
 
-def mov_attack(G: ECFFPoint, P: ECFFPoint) -> int:
+def mov_attack(G: ECFFPoint, P: ECFFPoint) -> ResultSet:
     """Try solving the discrete logarithm problem using the MOV attack"""
     E = cast(ECFF, G.curve())
     print("* Computing embedding degree k of E...")
@@ -67,4 +67,4 @@ def mov_attack(G: ECFFPoint, P: ECFFPoint) -> int:
 
     if n_p * G != P:
         raise ValueError(f"n * G != P (n = {n_p})")
-    return int(n_p)
+    return ResultSet(int(n_p), int(n))

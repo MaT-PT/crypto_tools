@@ -8,7 +8,7 @@ from .ecc_utils import AInvs, Point, calc_curve_params, parse_int
 
 @dataclass
 class Arguments:
-    p: int
+    p: list[int]
     a1: int
     a2: int
     a3: int
@@ -72,7 +72,15 @@ def parse_args() -> Arguments:
         "Curve has equation y^2 + a1*x*y + a3*y = x^3 + a2*x^2 + a4*x + a6 (mod p) "
         "(or y^2 = x^3 + a*x + b (mod p))",
     )
-    grp_curve.add_argument("-p", type=my_int, help="Prime modulus", metavar="p", required=True)
+    grp_curve.add_argument(
+        "-p",
+        type=my_int,
+        action="extend",
+        nargs="+",
+        help="Prime modulus/moduli (multiple primes will enable attacking composite curves)",
+        metavar="p",
+        required=True,
+    )
     grp_curve.add_argument("-a1", type=my_int, help="Param a1 (optional)", metavar="a1")
     grp_curve.add_argument("-a2", type=my_int, help="Param a2 (optional)", metavar="a2")
     grp_curve.add_argument("-a3", type=my_int, help="Param a3 (optional)", metavar="a3")
@@ -148,6 +156,9 @@ def parse_args() -> Arguments:
 
     args = parser.parse_args()
 
+    if len(args.p) == 0:
+        parser.error("no prime modulus given")
+
     if args.G is not None:
         args.gx, args.gy = args.G
     if args.P is not None:
@@ -197,13 +208,14 @@ def parse_args() -> Arguments:
     a6 = args.a6 = args.b = args.a6 or 0
 
     a_invs = AInvs((a1, a2, a3, a4, a6))
-    if isinstance(args.G, Point) and not args.G.on_curve(a_invs, args.p):
-        parser.error("G is not on the curve")
-    if isinstance(args.P, Point) and not args.P.on_curve(a_invs, args.p):
-        parser.error("P is not on the curve")
-    if args.decrypt_aes is not None:
-        if isinstance(args.B, Point) and not args.B.on_curve(a_invs, args.p):
-            parser.error("B is not on the curve")
+    for p in args.p:
+        if isinstance(args.G, Point) and not args.G.on_curve(a_invs, p):
+            parser.error("G is not on the curve")
+        if isinstance(args.P, Point) and not args.P.on_curve(a_invs, p):
+            parser.error("P is not on the curve")
+        if args.decrypt_aes is not None:
+            if isinstance(args.B, Point) and not args.B.on_curve(a_invs, p):
+                parser.error("B is not on the curve")
 
     args.a_invs = a_invs
 

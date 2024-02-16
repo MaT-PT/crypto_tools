@@ -2,11 +2,17 @@ from math import prod
 from typing import cast
 
 from ..sage_types import CRT_list, ECFFPoint, Integer, discrete_log_lambda
+from ..types import ResultSet
 
 
 def pohlig_hellman_attack(
-    G: ECFFPoint, P: ECFFPoint, size_limit: int = 48, max_n_bits: int = 0, min_n_bits: int = 1
-) -> int:
+    G: ECFFPoint,
+    P: ECFFPoint,
+    size_limit: int = 48,
+    max_n_bits: int = 0,
+    min_n_bits: int = 1,
+    allow_partial: bool = False,
+) -> ResultSet:
     """Try solving the discrete logarithm problem using the Pohlig-Hellman algorithm.
     Try with factors of increasing size until the log is found
     (CRT can give the right result even if not all factors are computed).
@@ -48,11 +54,11 @@ def pohlig_hellman_attack(
         print(f"  * CRT = {crt}")
         if crt * G == P:
             print("  * Found n!")
-            return int(crt)
+            return ResultSet(int(crt), int(prod(mods)))
 
+    mod = prod(mods)
     if max_n_bits > 0:
         print("* Could not find log directly, trying with Pollard's Lambda algorithm...")
-        mod = prod(mods)
         print("  * Partial mod:", mod)
         GP_ = P - G * crt
         G_ = G * mod
@@ -66,7 +72,10 @@ def pohlig_hellman_attack(
 
         if n_p * G != P:
             raise ValueError(f"n * G != P (n = {n_p})")
-        return int(n_p)
+        return ResultSet(int(n_p), int(mod))
+    elif allow_partial:
+        print("* Actual n not found, using partial CRT result")
+        return ResultSet(int(crt), int(mod))
     else:
         raise ValueError(
             "Found no solution for ECDLP, try increasing the factor bit size limit "

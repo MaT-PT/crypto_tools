@@ -1,33 +1,42 @@
 #!/usr/bin/env python3
 
+from itertools import product
+from math import prod
 from typing import Callable, ParamSpec, TypeVar, cast
 
 from libs.argparse_utils import Arguments, parse_args
 from libs.crypto_utils import decrypt_aes_hash, long_to_bytes
-from libs.ecc_utils import Point, discriminant
+from libs.ecc_utils import Point, discriminant, lift_x
+from libs.types import Result
 
 _P = ParamSpec("_P")
 _T = TypeVar("_T")
 
 
-def decrypt_diffie_hellman(args: Arguments, n: int, p: int) -> bytes:
-    assert args.decrypt_aes is not None and args.iv is not None
-    from libs.sage_types import ECFF, GF, ECFFPoint, EllipticCurve, Integer
+def decrypt_diffie_hellman(args: Arguments, n: int, ps: list[int]) -> set[bytes]:
+    assert args.decrypt_aes is not None and args.iv is not None and args.bx is not None
+    from libs.ecc_utils import lift_x
+    from libs.sage_types import EC, ECFFPoint, EllipticCurve, Zmod
 
-    E = cast(ECFF, EllipticCurve(GF(p), args.a_invs))
+    N = prod(ps)
+    E = cast(EC, EllipticCurve(Zmod(N), args.a_invs))
 
     if args.by is None:
-        B = cast(ECFFPoint, E.lift_x(Integer(args.bx)))
+        Bs = {cast(ECFFPoint, E(pt)) for pt in lift_x(args.a_invs, args.bx, ps)}
     else:
-        B = cast(ECFFPoint, E(args.B))
+        Bs = {cast(ECFFPoint, E(args.B))}
 
-    print("B:", B)
+    decrypted: set[bytes] = set()
+    for B in Bs:
+        print("B:", B)
 
-    S = B * n
-    shared_secret = int(S[0])
-    print("* Shared secret:", shared_secret)
+        S = B * n
+        shared_secret = int(S[0])
+        print("* Shared secret:", shared_secret)
 
-    return decrypt_aes_hash(args.decrypt_aes, shared_secret, args.iv, args.hash)
+        decrypted.add(decrypt_aes_hash(args.decrypt_aes, shared_secret, args.iv, args.hash))
+
+    return decrypted
 
 
 def run_attack(
@@ -44,6 +53,7 @@ def run_attack(
         try:
             res = attack(*args, **kwargs)
             print(f"* {name} attack succeded!")
+            print(f"Result: {res}")
             return res
         except ValueError as e:
             print(f"* {name} attack failed:", e)
@@ -54,13 +64,13 @@ def run_attack(
     return None
 
 
-def run_attacks(args: Arguments, p: int) -> int | set[int] | None:
+def run_attacks(args: Arguments, p: int, is_composite: bool = False) -> set[Result] | None:
     run_all = all(not atk for atk in (args.mov, args.smart, args.ph, args.singular))
     a1, a2, a3, a4, a6 = a_invs = args.a_invs
     print(f"* Curve: y^2 + {a1}*x*y + {a3}*y = x^3 + {a2}*x^2 + {a4}*x + {a6} (mod {p})")
-    print("* Importing libs...")
     from libs.attacks import mov_attack, pohlig_hellman_attack, singular_attack, smart_attack
-    from libs.sage_types import ECFF, GF, ECFFPoint, EllipticCurve, FFPmodn, Integer
+    from libs.ecc_utils import lift_x
+    from libs.sage_types import ECFF, GF, ECFFPoint, EllipticCurve, FFPmodn
 
     try:
         F = cast(FFPmodn, GF(p))
@@ -76,9 +86,10 @@ def run_attacks(args: Arguments, p: int) -> int | set[int] | None:
 
     if d == 0:
         print("The curve is singular!")
-        return run_attack(
+        res = run_attack(
             singular_attack, "singular curve", run_all, args.singular, a_invs, F, gx, gy, px, py
         )
+        return res.result_set() if res else None
 
     print("This is a valid elliptic curve (non-singular)")
     try:
@@ -86,48 +97,120 @@ def run_attacks(args: Arguments, p: int) -> int | set[int] | None:
     except ValueError as e:
         print(f"Error: {e}")
         return None
-
-    if gy is None:
-        G = cast(ECFFPoint, E.lift_x(Integer(gx)))
-        args.gy = gy = int(G[1])
-        args.G = Point(gx, gy)
-    else:
-        G = cast(ECFFPoint, E(args.G))
-    if py is None:
-        P = cast(ECFFPoint, E.lift_x(Integer(px)))
-        args.py = py = int(P[1])
-        args.P = Point(px, py)
-    else:
-        P = cast(ECFFPoint, E(args.P))
-
     print()
     print("E:", E)
-    print("G:", G)
-    print("P:", P)
 
-    res = run_attack(mov_attack, "MOV", run_all, args.mov, G, P)
-    if res is not None:
-        return res
+    if gy is None:
+        Gs = {cast(ECFFPoint, E(pt)) for pt in lift_x(args.a_invs, args.gx, [p])}
+    else:
+        Gs = {cast(ECFFPoint, E(args.G))}
+    if py is None:
+        Ps = {cast(ECFFPoint, E(pt)) for pt in lift_x(args.a_invs, args.px, [p])}
+    else:
+        Ps = {cast(ECFFPoint, E(args.P))}
 
-    res = run_attack(smart_attack, "Smart", run_all, args.smart, G, P)
-    if res is not None:
-        return res
+    if len(Gs) == 2 and len(Ps) == 2:
+        G1, G2 = Gs
+        if G1 == -G2:
+            print()
+            print("Possible points are opposites: skipping one of the possible Ps")
+            Ps.pop()
 
-    res = run_attack(
-        pohlig_hellman_attack,
-        "Pohlig-Hellman",
-        run_all,
-        args.ph,
-        G,
-        P,
-        args.max_bits,
-        args.max_n_bits,
-        args.min_n_bits,
-    )
-    if res is not None:
-        return res
+    results: set[Result] = set()
 
-    return None
+    for G, P in product(Gs, Ps):
+        print()
+        print("* G:", G.xy())
+        print("* P:", P.xy())
+
+        res = run_attack(mov_attack, "MOV", run_all, args.mov, G, P)
+        if res is not None:
+            results |= res.result_set()
+            continue
+
+        res = run_attack(smart_attack, "Smart", run_all, args.smart, G, P)
+        if res is not None:
+            results |= res.result_set()
+            continue
+
+        res = run_attack(
+            pohlig_hellman_attack,
+            "Pohlig-Hellman",
+            run_all,
+            args.ph,
+            G,
+            P,
+            args.max_bits,
+            args.max_n_bits,
+            args.min_n_bits,
+            allow_partial=is_composite,
+        )
+        if res is not None:
+            results |= res.result_set()
+            continue
+
+    return results or None
+
+
+def composite_attack(args: Arguments, ps: list[int]) -> set[int] | None:
+    from libs.sage_types import EC, CRT_list, ECFFPoint, EllipticCurve, Zmod
+
+    results: list[set[Result]] = []
+    for p in ps:
+        res = run_attacks(args, p, is_composite=True)
+        print()
+        if not res:
+            print("No attack succeeded :(")
+            return None
+        results.append(res)
+
+    print("Results:")
+    for p, r in zip(ps, results):
+        print(f"* p = {p}: {r}")
+    print()
+
+    N = prod(ps)
+    E = cast(EC, EllipticCurve(Zmod(N), args.a_invs))
+    if args.gy is None:
+        Gs = {cast(ECFFPoint, E(pt)) for pt in lift_x(args.a_invs, args.gx, ps)}
+    else:
+        Gs = {cast(ECFFPoint, E(args.G))}
+    if args.py is None:
+        Ps = {cast(ECFFPoint, E(pt)) for pt in lift_x(args.a_invs, args.px, ps)}
+    else:
+        Ps = {cast(ECFFPoint, E(args.P))}
+
+    valid_ns: set[int] = set()
+    parts: tuple[Result, ...]
+    for parts in product(*results):
+        print("* Trying combination:", parts)
+        n = int(CRT_list([part.n for part in parts], [part.order for part in parts]))
+        print(f"* n = {n}")
+        for G, P in product(Gs, Ps):
+            print(f"  * Checking for G = {G}; P = {P}...")
+            if n * G == P:
+                print("Found valid n!")
+                valid_ns.add(n)
+                if args.gy is None:
+                    args.gy = int(G[1])
+                    args.G = Point(args.gx, args.gy)
+                if args.py is None:
+                    args.py = int(P[1])
+                    args.P = Point(args.px, args.py)
+
+    return valid_ns if valid_ns else None
+
+
+def check_curve_type(args: Arguments, ps: list[int]) -> set[int] | None:
+    print("* Importing libs...")
+    import importlib
+
+    importlib.import_module("libs.sage_types")
+
+    if len(ps) == 1:
+        res = run_attacks(args, ps[0])
+        return {r.n for r in res} if res else None
+    return composite_attack(args, ps)
 
 
 def main() -> None:
@@ -142,7 +225,7 @@ def main() -> None:
     else:
         print(f"Target point P: {args.P}")
 
-    res = run_attacks(args, args.p)
+    res = check_curve_type(args, args.p)
     print()
     if res is None:
         print("No attack succeeded :(")
@@ -150,14 +233,11 @@ def main() -> None:
 
     print("Discrete logarithm: P = n * G")
 
-    if isinstance(res, set):
-        if len(res) == 0:
-            print("Attack returned no possible values :(")
-            return
-        if len(res) > 1:
-            print("Multiple possible values found for n:")
-    else:
-        res = {res}
+    if len(res) == 0:
+        print("Attack returned no possible values :(")
+        return
+    if len(res) > 1:
+        print("Multiple possible values found for n:")
 
     for n in res:
         print()
@@ -165,21 +245,22 @@ def main() -> None:
         if args.decrypt or args.decrypt_aes is not None:
             if args.decrypt:
                 print("* Decrypting secret directly...")
-                decrypted = long_to_bytes(n)
+                decrypted = {long_to_bytes(n)}
             elif args.bx is None:
                 print(f"* Decrypting AES (hash: {args.hash})...")
                 assert args.decrypt_aes is not None and args.iv is not None
-                decrypted = decrypt_aes_hash(args.decrypt_aes, n, args.iv, args.hash)
+                decrypted = {decrypt_aes_hash(args.decrypt_aes, n, args.iv, args.hash)}
             else:
                 print(f"* Decrypting AES with Diffie-Hellman (hash function: {args.hash})...")
                 decrypted = decrypt_diffie_hellman(args, n, args.p)
 
-            try:
-                print("Decrypted message:", decrypted.decode())
-            except UnicodeDecodeError:
-                print("Warning: decrypted message is not a valid UTF-8 string")
-                print("* Raw bytes:", decrypted)
-                print("* Hex:", decrypted.hex())
+            for dec in decrypted:
+                try:
+                    print("Decrypted message:", dec.decode())
+                except UnicodeDecodeError:
+                    print("Warning: decrypted message is not a valid UTF-8 string")
+                    print("* Raw bytes:", dec)
+                    print("* Hex:", dec.hex())
 
 
 if __name__ == "__main__":

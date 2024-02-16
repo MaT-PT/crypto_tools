@@ -1,4 +1,5 @@
 from functools import cache
+from math import prod
 from string import whitespace as ws
 from typing import Iterable, NewType, Self, cast
 
@@ -61,8 +62,10 @@ def curve_contains_point(a_invs: AInvs, p: int, P: Point | tuple[int, int]) -> b
     ) % p == 0
 
 
-@cache
-def calc_curve_params(p: int, P: Point, Q: Point) -> AInvsShort2:
+def calc_curve_params(p: int | list[int], P: Point, Q: Point) -> AInvsShort2:
+    if isinstance(p, list):
+        p = prod(p)
+
     py2 = pow(P.y, 2, p)
     qy2 = pow(Q.y, 2, p)
     px3 = pow(P.x, 3, p)
@@ -80,12 +83,15 @@ def calc_curve_params(p: int, P: Point, Q: Point) -> AInvsShort2:
 @cache
 def b_invariants(a_invs: AInvs, p: int) -> BInvs:
     a1, a2, a3, a4, a6 = a_invs
-    return BInvs((
-        (a1 * a1 + 4 * a2) % p,
-        (a1 * a3 + 2 * a4) % p,
-        (pow(a3, 2, p) + 4 * a6) % p,
-        (pow(a1, 2, p) * a6 + 4 * a2 * a6 - a1 * a3 * a4 + a2 * pow(a3, 2, p) - pow(a4, 2, p)) % p,
-    ))
+    return BInvs(
+        (
+            (a1 * a1 + 4 * a2) % p,
+            (a1 * a3 + 2 * a4) % p,
+            (pow(a3, 2, p) + 4 * a6) % p,
+            (pow(a1, 2, p) * a6 + 4 * a2 * a6 - a1 * a3 * a4 + a2 * pow(a3, 2, p) - pow(a4, 2, p))
+            % p,
+        )
+    )
 
 
 @cache
@@ -195,12 +201,14 @@ def isomorphism(E: AInvs, F: AInvs, p: int) -> URST | None:
 @cache
 def dual_isomorphism(urst: URST, p: int) -> URST:
     u, r, s, t = urst
-    return URST((
-        pow(u, -1, p),
-        (-r * pow(u, -2, p)) % p,
-        (-s * pow(u, -1, p)) % p,
-        (((r * s - t) % p) * pow(u, -3, p)) % p,
-    ))
+    return URST(
+        (
+            pow(u, -1, p),
+            (-r * pow(u, -2, p)) % p,
+            (-s * pow(u, -1, p)) % p,
+            (((r * s - t) % p) * pow(u, -3, p)) % p,
+        )
+    )
 
 
 @cache
@@ -229,3 +237,33 @@ def morph_point(
         return x, None
     y = (((y - (s * x + t)) % p) * pow(u, -3, p)) % p
     return x, y
+
+
+def lift_x(a_invs: AInvs, x: int, ps: list[int]) -> set[Point]:
+    from itertools import product
+
+    from .sage_types import ECFF, GF, CRT_list, EllipticCurve, Integer
+
+    ys_list: list[set[int]] = []
+    ps_sage = [Integer(p) for p in ps]
+
+    print(f"* Finding y-coordinates for {x = }")
+    for p in ps_sage:
+        E = cast(ECFF, EllipticCurve(GF(p), a_invs))
+        ys = {Integer(P[1]) for P in E.lift_x(Integer(x), all=True)}
+        print(f"  * {p = }: {len(ys)} y-coordinates found")
+        for y in ys:
+            print(f"    * {y = }")
+        ys_list.append(ys)
+
+    final_ys: set[int] = set()
+    for y_list in product(*ys_list):
+        print("* Trying CRT with y-coordinates:", y_list)
+        if len(y_list) == len(ps_sage):
+            y = int(CRT_list(list(y_list), ps_sage))
+            print(f"  * Result: {y = }")
+            final_ys.add(y)
+        else:
+            print("  * Skipping CRT, not enough y-coordinates")
+
+    return {Point(x, y) for y in final_ys}

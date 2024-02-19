@@ -13,11 +13,11 @@ URST = NewType("URST", tuple[int, int, int, int])
 
 def parse_int(value: str) -> int:
     value = value.strip()
-    if value.startswith("0x"):
+    if value.lstrip("-").startswith("0x"):
         return int(value, 16)
-    if value.startswith("0b"):
+    if value.lstrip("-").startswith("0b"):
         return int(value, 2)
-    if value.startswith("0o"):
+    if value.lstrip("-").startswith("0o"):
         return int(value, 8)
     return int(value)
 
@@ -28,7 +28,9 @@ class Point(tuple[int, int]):
         if isinstance(x, tuple):
             t = x
         elif isinstance(x, str):
-            t = (parse_int(n) for n in x.strip(ws + "()[]{}").split(","))
+            t = [parse_int(n) for n in x.strip(ws + "()[]{}").split(",")]
+            if len(t) != 2:
+                raise ValueError("Invalid number of coordinates")
         elif y is not None:
             t = (x, y)
         else:
@@ -139,6 +141,19 @@ def short_weier_form3(a_invs: AInvs, p: int) -> AInvsShort3:
 
 
 @cache
+def long_weier_form(a_invs: AInvs | AInvsShort2 | AInvsShort3) -> AInvs:
+    match a_invs:
+        case a, b:
+            return AInvs((0, 0, 0, a, b))
+        case a, b, c:
+            return AInvs((0, a, 0, b, c))
+        case a1, a2, a3, a4, a6:
+            return AInvs((a1, a2, a3, a4, a6))
+        case _:
+            raise ValueError("Invalid weierstrass form")
+
+
+@cache
 def isomorphisms(E: AInvs, F: AInvs, p: int, just_one: bool = False) -> URST | list[URST] | None:
     if E == F:
         if just_one:
@@ -212,19 +227,6 @@ def dual_isomorphism(urst: URST, p: int) -> URST:
 
 
 @cache
-def long_weier_form(a_invs: AInvs | AInvsShort2 | AInvsShort3) -> AInvs:
-    match a_invs:
-        case a, b:
-            return AInvs((0, 0, 0, a, b))
-        case a, b, c:
-            return AInvs((0, a, 0, b, c))
-        case a1, a2, a3, a4, a6:
-            return AInvs((a1, a2, a3, a4, a6))
-        case _:
-            raise ValueError("Invalid weierstrass form")
-
-
-@cache
 def morph_point(
     urst: URST, p: int, x: int | tuple[int, int | None], y: int | None = None
 ) -> tuple[int, int | None]:
@@ -232,10 +234,19 @@ def morph_point(
         x, y = x
     u, r, s, t = urst
 
-    x = ((x - r) * pow(u, -2, p)) % p
-    if y is None:
-        return x, None
-    y = (((y - (s * x + t)) % p) * pow(u, -3, p)) % p
+    x -= r
+    if isinstance(x, int):
+        x %= p
+    if y is not None:
+        y -= s * x + t
+        if isinstance(y, int):
+            y %= p
+        y *= pow(u, -3, p)
+        if isinstance(y, int):
+            y %= p
+    x *= pow(u, -2, p)
+    if isinstance(x, int):
+        x %= p
     return x, y
 
 

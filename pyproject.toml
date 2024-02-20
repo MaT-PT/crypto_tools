@@ -25,3 +25,6 @@ show_traceback = true
 [[tool.mypy.overrides]]
 module = "sage.*"
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+filterwarnings = ['ignore:visit_Str is deprecated:DeprecationWarning']

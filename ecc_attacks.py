@@ -87,7 +87,17 @@ def run_attacks(args: Arguments, p: int, is_composite: bool = False) -> set[Resu
     if d == 0:
         print("The curve is singular!")
         res = run_attack(
-            singular_attack, "singular curve", run_all, args.singular, a_invs, F, gx, gy, px, py
+            singular_attack,
+            "singular curve",
+            run_all,
+            args.singular,
+            a_invs,
+            F,
+            gx,
+            gy,
+            px,
+            py,
+            args.use_generic_log,
         )
         return res.result_set() if res else None
 
@@ -202,15 +212,19 @@ def composite_attack(args: Arguments, ps: list[int]) -> set[int] | None:
 
 
 def check_curve_type(args: Arguments, ps: list[int]) -> set[int] | None:
-    print("* Importing libs...")
-    import importlib
-
-    importlib.import_module("libs.sage_types")
-
     if len(ps) == 1:
         res = run_attacks(args, ps[0])
         return {r.n for r in res} if res else None
     return composite_attack(args, ps)
+
+def import_sagemath() -> None:
+    import importlib
+
+    import sage.version
+
+    print(f"* Importing SageMath version {sage.version.version}...")
+    importlib.import_module("libs.sage_types")
+    print("* SageMath imported successfully")
 
 
 def main() -> None:
@@ -224,6 +238,10 @@ def main() -> None:
         print("Target point P: Px =", args.px)
     else:
         print(f"Target point P: {args.P}")
+
+    print()
+    import_sagemath()
+    print()
 
     res = check_curve_type(args, args.p)
     print()

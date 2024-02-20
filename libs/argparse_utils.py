@@ -23,7 +23,8 @@ class Arguments:
     max_bits: int
     max_n_bits: int
     min_n_bits: int
-    decrypt: bool | None
+    use_generic_log: bool
+    decrypt: bool
     decrypt_aes: bytes | None
     iv: bytes | None
     hash: str
@@ -111,6 +112,14 @@ def parse_args() -> Arguments:
     grp_ph.add_argument("--max-bits", "-m", type=pos_int, default=48, help="Max factor bit length")
     grp_ph.add_argument("--max-n-bits", "-M", type=pos_int, default=0, help="Max bit length for n")
     grp_ph.add_argument("--min-n-bits", "-L", type=pos_int, default=1, help="Min bit length for n")
+
+    grp_s = parser.add_argument_group("Singular attack")
+    grp_s.add_argument(
+        "--use-generic-log",
+        "-u",
+        action="store_true",
+        help="Use generic discrete_log() function instead of native .log() method; works better in some cases",
+    )
 
     grp_d = parser.add_argument_group(
         "Decryption", description="Decrypt plain secret or AES, with or without Diffie-Hellman"

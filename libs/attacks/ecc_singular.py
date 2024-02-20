@@ -2,12 +2,18 @@ from itertools import product
 from typing import cast
 
 from ..ecc_utils import AInvs, isomorphism, long_weier_form, morph_point, short_weier_form3
-from ..sage_types import FFPmodn, Integer, PRmodp, polygen
+from ..sage_types import FFPmodn, Integer, PRmodp, discrete_log, polygen
 from ..types import ResultSet
 
 
 def singular_attack(
-    a_invs: AInvs, F: FFPmodn, gx0: int, gy0: int | None, px0: int, py0: int | None
+    a_invs: AInvs,
+    F: FFPmodn,
+    gx0: int,
+    gy0: int | None,
+    px0: int,
+    py0: int | None,
+    use_generic_log: bool = False,
 ) -> ResultSet:
     p = F.characteristic()
     a1, a2, a3, a4, a6 = a_invs
@@ -87,7 +93,18 @@ def singular_attack(
         u = (gy_ + t * gx_) / (gy_ - t * gx_)
         v = (py_ + t * px_) / (py_ - t * px_)
 
-        n = v.log(u)
+        if use_generic_log:
+            print(
+                "  * Using generic discrete_log() function; if it takes too long, you can "
+                "try again without --use-generic-log/-u to use native log() method instead"
+            )
+            n = discrete_log(v, u)
+        else:
+            print(
+                "  * Using native log() method; if it seems to hang, you can try again "
+                "with --use-generic-log/-u to use generic discrete_log() function instead"
+            )
+            n = v.log(u)
         if multiple_solutions:
             print(f"  * n = {n}")
         logs.add(int(n))

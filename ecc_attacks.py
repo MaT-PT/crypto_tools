@@ -5,12 +5,17 @@ from math import prod
 from typing import Callable, ParamSpec, TypeVar, cast
 
 from libs.argparse_utils import Arguments, parse_args
-from libs.crypto_utils import decrypt_aes_hash, long_to_bytes
+from libs.crypto_utils import decrypt_aes_hash_enc, long_to_bytes
 from libs.ecc_utils import Point, discriminant, lift_x
 from libs.types import Result
 
 _P = ParamSpec("_P")
 _T = TypeVar("_T")
+
+
+def decrypt_aes(args: Arguments, secret: int) -> bytes:
+    assert args.decrypt_aes is not None and args.iv is not None
+    return decrypt_aes_hash_enc(args.decrypt_aes, secret, args.iv, args.hash, args.encode_method)
 
 
 def decrypt_diffie_hellman(args: Arguments, n: int, ps: list[int]) -> set[bytes]:
@@ -28,13 +33,13 @@ def decrypt_diffie_hellman(args: Arguments, n: int, ps: list[int]) -> set[bytes]
 
     decrypted: set[bytes] = set()
     for B in Bs:
-        print("B:", B)
+        print("B:", B.xy())
 
         S = B * n
         shared_secret = int(S[0])
         print("* Shared secret:", shared_secret)
 
-        decrypted.add(decrypt_aes_hash(args.decrypt_aes, shared_secret, args.iv, args.hash))
+        decrypted.add(decrypt_aes(args, shared_secret))
 
     return decrypted
 
@@ -217,6 +222,7 @@ def check_curve_type(args: Arguments, ps: list[int]) -> set[int] | None:
         return {r.n for r in res} if res else None
     return composite_attack(args, ps)
 
+
 def import_sagemath() -> None:
     import importlib
 
@@ -267,7 +273,7 @@ def main() -> None:
             elif args.bx is None:
                 print(f"* Decrypting AES (hash: {args.hash})...")
                 assert args.decrypt_aes is not None and args.iv is not None
-                decrypted = {decrypt_aes_hash(args.decrypt_aes, n, args.iv, args.hash)}
+                decrypted = {decrypt_aes(args, n)}
             else:
                 print(f"* Decrypting AES with Diffie-Hellman (hash function: {args.hash})...")
                 decrypted = decrypt_diffie_hellman(args, n, args.p)

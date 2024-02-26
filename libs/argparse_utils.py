@@ -1,8 +1,9 @@
 from argparse import ArgumentParser, ArgumentTypeError
 from argparse import BooleanOptionalAction as BOA
 from dataclasses import dataclass
+from typing import get_args
 
-from .crypto_utils import check_hash_type, hexstr_to_bytes
+from .crypto_utils import EncodeMethod, check_hash_type, hexstr_to_bytes
 from .ecc_utils import AInvs, Point, calc_curve_params, parse_int
 
 
@@ -28,6 +29,7 @@ class Arguments:
     decrypt_aes: bytes | None
     iv: bytes | None
     hash: str
+    encode_method: EncodeMethod
     B: Point | None
     bx: int | None
     by: int | None
@@ -140,6 +142,14 @@ def parse_args() -> Arguments:
     )
     grp_d.add_argument(
         "--hash", "-H", type=hash_, default="SHA1", help="Hash function for AES (default: SHA1)"
+    )
+    grp_d.add_argument(
+        "--encode-method",
+        "-e",
+        choices=get_args(EncodeMethod),
+        default="str",
+        help="Method used to encode secret to generate AES key: "
+        "'str' (default) or 'bytes' (long_to_bytes)",
     )
     grp_b = parser.add_argument_group(
         "Extra point B (Bob's public key) - Optional, only used in Diffie-Hellman decryption",

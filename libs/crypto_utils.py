@@ -1,5 +1,5 @@
 import hashlib
-from typing import NewType, Protocol, SupportsIndex
+from typing import Callable, Literal, NewType, Protocol, SupportsIndex, TypeAlias, get_args
 
 from Crypto.Cipher import AES
 from Crypto.Util.number import bytes_to_long as bytes_to_long
@@ -11,6 +11,14 @@ HexStr = NewType("HexStr", str)
 
 HexInt = NewType("HexInt", str)
 """Integer in hex format (`0x...`)"""
+
+
+EncodeMethod: TypeAlias = Literal["str", "bytes"]
+ENCODE_METHODS: dict[EncodeMethod, Callable[[int], bytes]] = {
+    "str": lambda x: str(x).encode(),
+    "bytes": lambda x: long_to_bytes(x),
+}
+assert set(get_args(EncodeMethod)) == set(ENCODE_METHODS.keys())
 
 
 class SupportsHex(Protocol):
@@ -76,11 +84,17 @@ def decrypt_aes(encrypted: Buffer, key: Buffer, iv: Buffer) -> bytes:
     return unpad_message(plain)
 
 
-def decrypt_aes_hash(encrypted: Buffer, secret: int, iv: Buffer, hsh: str = "SHA1") -> bytes:
+def decrypt_aes_hash(encrypted: Buffer, secret: bytes, iv: Buffer, hsh: str = "SHA1") -> bytes:
     h = hashlib.new(hsh)
-    h.update(str(secret).encode())
+    h.update(secret)
     key = h.digest()[:16]
     return decrypt_aes(encrypted, key, iv)
+
+
+def decrypt_aes_hash_enc(
+    encrypted: Buffer, secret: int, iv: Buffer, hsh: str = "SHA1", method: EncodeMethod = "str"
+) -> bytes:
+    return decrypt_aes_hash(encrypted, ENCODE_METHODS[method](secret), iv, hsh)
 
 
 def sha1_long(data: str) -> int:

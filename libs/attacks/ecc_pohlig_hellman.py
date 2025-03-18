@@ -45,7 +45,7 @@ def pohlig_hellman_attack(
         Pp = cast(ECFFPoint, P * n_fact)
 
         print("  * Computing discrete log...")
-        n_p = Gp.discrete_log(Pp)
+        n_p = Pp.log(Gp)
         print(f"  * n_p = {n_p}")
         logs.append(n_p)
 
